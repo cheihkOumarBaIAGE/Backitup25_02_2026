@@ -566,11 +566,11 @@ if run:
                 encoding="utf-8-sig",
                 quoting=quoting_mode,
                 escapechar=" " if quoting_mode == csv.QUOTE_NONE else None
-        )
-    else:
-        b.write(str(obj).encode("utf-8"))
-    b.seek(0)
-    return b
+            )
+        else:
+            b.write(str(obj).encode("utf-8"))
+        b.seek(0)
+        return b
 
     fn_mise = f"mise_a_jour_liste_de_diffusion_GW_{selected_school}_{now_str}.csv"
     fn_admin = f"ajouter_membres_admin_GW_{selected_school}_{now_str}.csv"
