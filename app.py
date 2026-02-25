@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import pandas as pd
 from pathlib import Path
@@ -8,15 +7,15 @@ import zipfile
 import csv
 
 # -----------------------
-# Page config & constants
+# Page configuration
 # -----------------------
-st.set_page_config(page_title="Minatholy", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Minatholy - ISM Manager", layout="wide", initial_sidebar_state="expanded")
 
 SCHOOLS = ["INGENIEUR", "GRADUATE", "MANAGEMENT", "DROIT", "MADIBA"]
 DATA_DIR = Path("data")
 
 # -----------------------
-# Mappings fournis (par école)
+# Default School Mappings
 # -----------------------
 SCHOOL_MAPPINGS = {
     "DROIT": {
@@ -79,235 +78,44 @@ SCHOOL_MAPPINGS = {
         "LG1-ADMINISTRATIONDESAFFAIRES": "lg1-adm-affaires2025-2026@ism.edu.sn",
         "LG1-ADMINISTRATIONDESAFFAIRESB": "lg1-adm-affairesb2025-2026@ism.edu.sn",
         "LG1-AGRO": "lg1-agro2025-2026@ism.edu.sn",
-        "LG1-AGRO-R2": "lg1-agro2025-2026@ism.edu.sn",
-        "LG1-ADMINISTRATIONDESAFFAIRES-R2": "lg1-adm-affaires-2r2025-2026@ism.edu.sn",
-        "LG1-MI-R2": "lg1-mi-2r2025-2026@ism.edu.sn",
-        "LG1-ORGA-GRH-R2": "lg1j-orga-grh-2r2025-2026@ism.edu.sn",
-        "LG1-CIM": "lg1-cim2025-2026@ism.edu.sn",
-        "LG1-CIMB": "lg1b-cim2025-2026@ism.edu.sn",
-        "LG1D-MI": "lg1d-mi2025-2026@ism.edu.sn",
-        "LG1E-MI": "lg1e-mi2025-2026@ism.edu.sn",
-        "LG1-CF-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1-CF-R2B": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1-CIM-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1-MARKETINGETCOMMUNICATION-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1-QHSE-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1G-CF": "lg1g-cf2025-2026@ism.edu.sn",
-        "LG1H-CF": "lg1h-cf2025-2026@ism.edu.sn",
-        "LG1I-CF": "lg1i-cf2025-2026@ism.edu.sn",
-        "LG1J-ORGA-GRH": "lg1j-orga-grh2025-2026@ism.edu.sn",
-        "LG1J-ORGA-GRHB": "lg1j-orga-grh-b2025-2026@ism.edu.sn",
-        "LG1K-CF": "lg1k-cf2025-2026@ism.edu.sn",
-        "LG1L-CF": "lg1l-cf2025-2026@ism.edu.sn",
-        "LG1-MARKETINGETCOMMUNICATION": "lg1-marketing-communication2025-2026@ism.edu.sn",
-        "LG1-MIFULLENGLISH": "lg1-mi-full-english2025-2026@ism.edu.sn",
-        "LG1-MIFULLENGLISH-R2": "lg1-mi-full-english-2r2025-2026@ism.edu.sn",
-        "LG1-QHSE": "lg1-qhse2025-2026@ism.edu.sn",
-        "LG1-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG2-CIMB": "lg2b-cim2025-2026@ism.edu.sn",
         "LG2-AGRO": "lg2-agro2025-2026@ism.edu.sn",
-        "LG2B-ORGA-GRH": "lg2b-orga-grh2025-2026@ism.edu.sn",
-        "LG2-CIM": "lg2-cim2025-2026@ism.edu.sn",
-        "LG2D-MI": "lg2d-mi2025-2026@ism.edu.sn",
-        "LG2E-MI": "lg2e-mi2025-2026@ism.edu.sn",
-        "LG2G-CF": "lg2g-cf2025-2026@ism.edu.sn",
-        "LG2H-CF": "lg2h-cf2025-2026@ism.edu.sn",
-        "LG2I-CF": "lg2i-cf2025-2026@ism.edu.sn",
-        "LG2J-ORGA-GRH": "lg2j-orga-grh2025-2026@ism.edu.sn",
-        "LG2K-CF": "lg2k-cf2025-2026@ism.edu.sn",
-        "LG2L-CF": "lg2l-cf2025-2026@ism.edu.sn",
-        "LG2-MARKETINGETCOMMUNICATION": "lg2-marketing-communication2025-2026@ism.edu.sn",
-        "LG2-MIFULLENGLISH": "lg2-mi-full-english2025-2026@ism.edu.sn",
-        "LG2-QHSE": "lg2-qhse2025-2026@ism.edu.sn",
-        "LG2-ADMINISTRATIONDESAFFAIRES": "lg2-adm-affaires2025-2026@ism.edu.sn",
-        "LG2-ADMINISTRATIONDESAFFAIRESB": "lg2-adm-affairesb2025-2026@ism.edu.sn",
         "LG3-AGRO": "lg3-agro2025-2026@ism.edu.sn",
+        "LG1-CIM": "lg1-cim2025-2026@ism.edu.sn",
+        "LG2-CIM": "lg2-cim2025-2026@ism.edu.sn",
         "LG3-MCI": "lg3-cim2025-2026@ism.edu.sn",
-        "LG3-MCIB": "lg3-cimb2025-2026@ism.edu.sn",
-        "LG3D-MI": "lg3d-mi2025-2026@ism.edu.sn",
-        "LG3E-MI": "lg3e-mi2025-2026@ism.edu.sn",
-        "LG3G-CF": "lg3g-cf2025-2026@ism.edu.sn",
-        "LG3H-CF": "lg3h-cf2025-2026@ism.edu.sn",
-        "LG3I-CF": "lg3i-cf2025-2026@ism.edu.sn",
-        "LG3K-CF": "lg3k-cf2025-2026@ism.edu.sn",
-        "LG3L-CF": "lg3l-cf2025-2026@ism.edu.sn",
-        "LG3-MARKETINGETCOMMUNICATION": "lg3-marketing-communication2025-2026@ism.edu.sn",
-        "LG3-MIFULLENGLISH": "lg3-mi-full-english2025-2026@ism.edu.sn",
-        "LG3-ORGA-GRH": "lg3-orga-grh2025-2026@ism.edu.sn",
-        "LG3-ORGA-GRHB": "lg3b-orga-grh2025-2026@ism.edu.sn",
     },
     "GRADUATE": {
         "EMBA": "emba-2526@ism.edu.sn",
-        "MASTER1-BUSINESSADMINISTRATION": "mba1business.administration-2526@ism.edu.sn",
-        "MASTER1-BUSINESSADMINISTRATIONSOIR": "mba1business.administrationsoir-2526@ism.edu.sn",
-        "LG3-ADMINISTRATIONDESAFFAIRESSOIR": "lg3-adm-affairessoir-2526@ism.edu.sn",
-        "MASTER1-QHSE": "mba1qhse-2526@ism.edu.sn",
         "MASTER1-ACG": "mba1acg-2526@ism.edu.sn",
-        "MASTER1-BANQUE-ASSURANCE": "mba1banque.assurance-2526@ism.edu.sn",
-        "MASTER1-CCE": "mba1cce-2526@ism.edu.sn",
-        "MASTER1-FINANCEDIGITALE(FINTECH)": "mba1finance-digitale-2526@ism.edu.sn",
-        "MASTER1-FINANCEDEMARCHEETTRADING": "mba1finance-de-marche-2526@ism.edu.sn",
-        "MASTER1-GCL": "mba1gcl-2526@ism.edu.sn",
-        "MASTER1-IF": "mba1if-2526@ism.edu.sn",
-        "MASTER1-INTERNATIONALMANAGEMENT": "mba1international.management-2526@ism.edu.sn",
-        "MASTER1-MAA": "mba1maa-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENTAGROBUSINESS": "mba1management.agrobusiness-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENTAGROBUSINESSSOIR": "mba1management.agrobusinesssoir-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENT,VENTEETRELATIONCLIENT": "mba1mvente.rc-2526@ism.edu.sn",
-        "MASTER1-MRH": "mba1mrh-2526@ism.edu.sn",
-        "MASTER1-MARCHEFINANCIERETTRADING": "mba1mft-2526@ism.edu.sn",
-        "MASTER1-RSEETDEVELOPPEMENTDURABLE": "mba1rse.dd-2526@ism.edu.sn",
-        "MASTER1-QHSESOIR": "mba1qhsesoir-2526@ism.edu.sn",
-        "MASTER1-ACGSOIR": "mba1acgsoir-2526@ism.edu.sn",
-        "MASTER1-BANQUE-ASSURANCESOIR": "mba1banque.assurancesoir-2526@ism.edu.sn",
-        "MASTER1-CCESOIR": "mba1ccesoir-2526@ism.edu.sn",
-        "MASTER1-GCLSOIR": "mba1gclsoir-2526@ism.edu.sn",
-        "MASTER1-IFSOIR": "mba1ifsoir-2526@ism.edu.sn",
-        "MASTER1-MAASOIR": "mba1maasoir-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENT,VENTEETRELATIONCLIENTSOIR": "mba1mvente.rcsoir-2526@ism.edu.sn",
-        "MASTER1-MRHSOIR": "mba1mrhsoir-2526@ism.edu.sn",
-        "BP3-PRO": "bp3-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENTDESENERGIESPÉTROLIÈRESETGAZIÈRES": "mba1management.pet.gaz-2526@ism.edu.sn",
-        "MASTER2-QHSE": "mba2qhse-2526@ism.edu.sn",
         "MASTER2-ACG": "mba2acg-2526@ism.edu.sn",
-        "MASTER2-ACGSOIR": "mba2acgsoir-2526@ism.edu.sn",
-        "MASTER2-BANQUE-ASSURANCE": "mba2banque.assurance-2526@ism.edu.sn",
-        "MASTER2-BANQUE-ASSURANCESOIR": "mba2banque.assurancesoir-2526@ism.edu.sn",
-        "MASTER2-CCE": "mba2cce-2526@ism.edu.sn",
-        "MASTER2-CCESOIR": "mba2ccesoir-2526@ism.edu.sn", 
-        "MASTER2-GCLSOIR": "mba2gclsoir-2526@ism.edu.sn",
-        "MASTER2-GCL": "mba2gcl-2526@ism.edu.sn",
-        "MASTER2-IF": "mba2if-2526@ism.edu.sn",
-        "MASTER2-INTERNATIONALMANAGEMENT": "mba2international.management-2526@ism.edu.sn",
-        "MASTER2-MAA": "mba2maa-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENTAGROBUSINESS": "mba2management.agrobusiness-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENT,VENTEETRELATIONCLIENT": "mba2mvente.rc-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENT,VENTEETRELATIONCLIENTSOIR": "mba2mvente.rc-2526@ism.edu.sn",
-        "MASTER2-MRH": "mba2mrh-2526@ism.edu.sn",
-        "MASTER2-BUSINESSADMINISTRATION": "mba2business.administration-2526@ism.edu.sn",
-        "MASTER2-BUSINESSADMINISTRATIONSOIR": "mba2business.administrationsoir-2526@ism.edu.sn",
-        "MASTER2-QHSESOIR": "mba2qhsesoir-2526@ism.edu.sn",
-        "MBA2-ACGSoir": "mba2acgsoir-2526@ism.edu.sn",
-        "MASTER2-IFSOIR": "mba2ifsoir-2526@ism.edu.sn",
-        "MASTER2-MRHSOIR": "mba2mrhsoir-2526@ism.edu.sn",
-        "MASTER2-FINANCEDIGITALE(FINTECH)": "mba2finance-digitale-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENTDESENERGIESPÉTROLIÈRESETGAZIÈRES": "mba2management.pet.gaz-2526@ism.edu.sn",
     },
     "MADIBA": {
         "JMI1": "jmi1-2526@ism.edu.sn",
         "LCM-1": "lcm1-2526@ism.edu.sn",
-        "LCMFULLENGLISH-1": "lcm1bilingue-2526@ism.edu.sn",
         "SPRI1-A": "spri1a-2526@ism.edu.sn",
-        "SPRI1-BILINGUE": "spri1bilingue-2526@ism.edu.sn",
-        "SPRI1-B": "spri1b-2526@ism.edu.sn",
-        "MLI-R2": "mlir2-2526@ism.edu.sn",
-        "JMI-2": "jmi2-2526@ism.edu.sn",
-        "LCM-2": "lcm2-2526@ism.edu.sn",
-        "SPRI2-A": "spri2a-2526@ism.edu.sn",
-        "SPRI2-B": "spri2b-2526@ism.edu.sn",
-        "JMI-3": "jmi3-2526@ism.edu.sn",
-        "LCM-3": "lcm3-2526@ism.edu.sn",
-        "SPRI3-A": "spri3a-2526@ism.edu.sn",
-        "SPRI3-B": "spri3b-2526@ism.edu.sn",
-        "SPRI3-C": "spri3c-2526@ism.edu.sn",
-        "MASTER1SCIENCEPOLITIQUEETRELATIONSINTERNATIONALES": "mba1spri-2526@ism.edu.sn",
-        "M1-SPRISOIR": "mba1sprisoir-2526@ism.edu.sn",
-        "MBA1-DIPLOMATIEETGÉOSTRATÉGIE": "mba1dg-2526@ism.edu.sn",
-        "MBA1-DIPLOMATIEETGÉOSTRATÉGIESOIR": "mba1dgsoir-2526@ism.edu.sn",
-        "MBA1-Gestiondeprojetsculturels": "mba1gpc-2526@ism.edu.sn",
-        "MBA1-CLRP": "mba1clrp-2526@ism.edu.sn",
-        "MBA1-CLRPSOIR": "mba1clrpsoir-2526@ism.edu.sn",
-        "MBA1-DGT": "mba1dgt-2526@ism.edu.sn",
-        "MBA1-EnvironnementetDéveloppementDurable": "mba1edd-2526@ism.edu.sn",
-        "MBA1-SPRIPAIXETSÉCURITÉ": "mba1sps-2526@ism.edu.sn",
-        "MASTER2SCIENCEPOLITIQUEETRELATIONSINTERNATIONALES": "mba2spri-2526@ism.edu.sn",
-        "MBA2-DGT": "mba2dgt-2526@ism.edu.sn",
-        "MBA2-CLRP": "mba2clrp-2526@ism.edu.sn",
-        "MBA2-CLRPSOIR": "mba2clrp-2526@ism.edu.sn",
-        "MBA2DIPLOMATIEETGÉOSTRATÉGIE": "mba2dg-2526@ism.edu.sn",
-        "MBA2-SPRIPAIXETSECURITE": "mba2sps-2526@ism.edu.sn",
-        "MBA2-GOUVERNANCEETMANAGEMENTPUBLIC": "mba2gouvernance.management.public-2526@ism.edu.sn",
     },
     "INGENIEUR": {
-        "L1INGENIEURS-R2A": "l1r2.ingenieura@ism.edu.sn",
-        "L1INGENIEURS-R2B": "l1r2.ingenieurb@ism.edu.sn",
         "L1-CPD": "l1cpd-2526@ism.edu.sn",
-        "L1A-IA(IAGE&TTL)": "l1aia-2526@ism.edu.sn",
-        "L1B-IA(IAGE&TTL)": "l1bia-2526@ism.edu.sn",
-        "L1C-IA(GLRS&ETSE)": "l1cia-2526@ism.edu.sn",
-        "L1-CDSD": "l1cdsd-2526@ism.edu.sn",
         "L1-CYBERSÉCURITÉ": "l1ia-cyber-2526@ism.edu.sn",
-        "L1D-IA(MAIE&MOSIEF)": "l1dia-2526@ism.edu.sn",
-        "L1E-IA(GLRS&ETSE)": "l1eia-2526@ism.edu.sn",
-        "L1F-IA(IAGE&TTLC)": "l1fia-2526@ism.edu.sn",
-        "L1G-IA(IAGE&TTL)": "l1gia-2526@ism.edu.sn",
-        "L1H-IA(IAGE&TTL)": "l1hia-2526@ism.edu.sn",
-        "L1-INTELLIGENCEARTIFICIELLE": "l1ia-cyber-2526@ism.edu.sn",
-        "L2-INTELLIGENCEARTIFICIELLE": "licence2ia2025-2026@ism.edu.sn",
-        "L2-CYBERSÉCURITÉ": "licence2cyber2025-2026@ism.edu.sn",
-        "L2-CDSD": "licence2cdsd2025-2026@ism.edu.sn",
-        "L2-CPD": "licence2cpd2025-2026@ism.edu.sn",
-        "L2-ETSE": "licence2etse2025-2026@ism.edu.sn",
-        "L2-GLRSB": "licence2glrsb2025-2026@ism.edu.sn",
-        "L2-GLRSA": "licence2glrsa2025-2026@ism.edu.sn",
-        "L2-IAGEA": "licence2iagea2025-2026@ism.edu.sn",
-        "L2-IAGEB": "licence2iageb2025-2026@ism.edu.sn",
-        "L2-MAIE": "licence2maie2025-2026@ism.edu.sn",
-        "L2-MOSIEF": "licence2mosief2025-2026@ism.edu.sn",
-        "L2-TTLB": "licence2ttlb2025-2026@ism.edu.sn",
-        "L2-TTLA": "licence2ttla2025-2026@ism.edu.sn",
-        "L3-CDSD": "licence3cdsd2025-2026@ism.edu.sn",
-        "L3-CPD": "licence3cpd2025-2026@ism.edu.sn",
-        "L3-ETSE": "licence3etse2025-2026@ism.edu.sn",
-        "L3-GLRSA": "licence3glrs2025-2026@ism.edu.sn",
-        "L3-GLRSB": "licence3glrs2025-2026@ism.edu.sn",
         "L3-IAGEA": "licence3iage2025-2026@ism.edu.sn",
-        "L3-IAGEB": "licence3iage2025-2026@ism.edu.sn",
-        "L3-MAIE": "licence3maie2025-2026@ism.edu.sn",
-        "L3-MOSIEF": "licence3mosief2025-2026@ism.edu.sn",
-        "L3-TTLA": "licence3ttl2025-2026@ism.edu.sn",
-        "L3-TTLB": "licence3ttl2025-2026@ism.edu.sn",
-        "M1IDC-BIGDATA&DATASTRATÉGIE": "mba1bigdata-2526@ism.edu.sn",
-        "M1IDC-MARKETINGDIGITAL&BRANDCONTENT": "mba1marketingdigital-2526@ism.edu.sn",
-        "M1IDC-UXDESIGN": "mba1ux-2526@ism.edu.sn",
-        "M1IRSD": "mba1info-2526@ism.edu.sn",
-        "M1PROJETS": "mba1projet-2526@ism.edu.sn",
-        "M1PROJETSSOIR": "mba1projetsoir-2526@ism.edu.sn",
-        "M1-MSSI": "mba1info-2526@ism.edu.sn",
-        "MBA1-FINTECH": "mba1fintech-2526@ism.edu.sn",
-        "MBA1-DATA-INTELLIGENCEARTIFICIELLE": "mba1ia-2526@ism.edu.sn",
-        "MBA1-ActuariatBigDataetAssuranceQuantitative": "mba1actuariat-2526@ism.edu.sn",
-        "MBA1-CDSD": "mba1cdsd-2526@ism.edu.sn",
-        "MBA2DATA-INTELLIGENCEARTIFICIELLE": "mba2data_ia-2526@ism.edu.sn",
-        "M2BIGDATA&DATASTRATÉGIE": "mba2bigdata-2526@ism.edu.sn",
-        "M2MARKETINGDIGITAL&BRANDCONTENT": "mba2marketingdigital-2526@ism.edu.sn",
-        "M2MSSI": "mba2mssi-2526@ism.edu.sn",
-        "M2UXDESIGN": "mba2uxdesign-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENTDEPROJETS": "mba2projetga-2526@ism.edu.sn",
-        "MBA2IRSD": "mba2irsd-2526@ism.edu.sn",
-        "MBA2-ACTUARIATBIGDATAETASSURANCEQUANTITATIVE": "mba2actuariat-2526@ism.edu.sn",
-        "MBA2-CDSD": "mba2cdsd-2526@ism.edu.sn",
-        "MBA2-MANAGEMENTDEPROJETSINTERNATIONAUX": "mba2projetinternationaux-2526@ism.edu.sn",
     }
 }
 
 # -----------------------
-# Helpers
+# Helper Functions
 # -----------------------
 def sanitize_csv_output(df: pd.DataFrame, is_profile=False, header=True):
     """
-    Converts DataFrame to CSV and performs 'Notepad-style' find/replace 
-    to fix triple quotes and password formatting.
+    Export to CSV and performs text cleanup to fix triple quotes and passwords.
     """
     b = BytesIO()
     df.to_csv(b, index=False, header=header, encoding="utf-8-sig")
     csv_text = b.getvalue().decode("utf-8-sig")
 
     if is_profile:
-        # Fix 1: Change triple quotes """ to single quotes "
+        # Fix 1: Triple quotes """ to single "
         csv_text = csv_text.replace('"""', '"')
-        
-        # Fix 2: Remove quotes around the password with commas
+        # Fix 2: Remove quotes around specific password with commas
         bad_pw = '"ismapps2025,,,,,,,,,,,,,,,,,1382"'
         good_pw = 'ismapps2025,,,,,,,,,,,,,,,,,1382'
         csv_text = csv_text.replace(bad_pw, good_pw)
@@ -316,200 +124,170 @@ def sanitize_csv_output(df: pd.DataFrame, is_profile=False, header=True):
     final_buffer.seek(0)
     return final_buffer
 
+def remove_accents_and_cleanup(s: str):
+    if not isinstance(s, str): return s
+    accent_map = str.maketrans({
+        "à": "a", "â": "a", "ä": "a", "é": "e", "è": "e", "ê": "e", "ë": "e",
+        "î": "i", "ï": "i", "ô": "o", "ö": "o", "û": "u", "ü": "u", "ÿ": "y"
+    })
+    return s.translate(accent_map)
+
 def read_emails_txt(path: Path):
-    if not path.exists():
-        return []
+    if not path.exists(): return []
     with path.open("r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
 def read_cours_mapping(cours_dir: Path):
     mapping = {}
-    if not cours_dir.exists():
-        return mapping
+    if not cours_dir.exists(): return mapping
     for txt_file in sorted(cours_dir.glob("*.txt")):
-        classe_name = txt_file.stem.upper()
-        with txt_file.open("r", encoding="utf-8") as f:
-            codes = [line.strip() for line in f if line.strip()]
-        mapping[classe_name] = codes
+        mapping[txt_file.stem.upper()] = [l.strip() for l in txt_file.open("r", encoding="utf-8") if l.strip()]
     return mapping
-
-def read_mapping_csv(mapping_csv: Path):
-    if not mapping_csv.exists():
-        return {}
-    dfm = pd.read_csv(mapping_csv, dtype=str).fillna("")
-    cols = [c.strip() for c in dfm.columns]
-    c1 = cols[0]
-    c2 = cols[1] if len(cols) > 1 else cols[0]
-    return dict(zip(dfm[c1].astype(str).str.upper().str.replace(r"\s+","",regex=True), dfm[c2].astype(str).str.strip()))
-
-def remove_accents_and_cleanup(s: str):
-    if not isinstance(s, str): return s
-    accent_map = str.maketrans({
-        "à": "a", "â": "a", "ä": "a", "á": "a", "ã": "a", "ȧ": "a",
-        "é": "e", "è": "e", "ê": "e", "ë": "e",
-        "ì": "i", "î": "i", "ï": "i", "í": "i",
-        "ò": "o", "ô": "o", "ö": "o", "ó": "o", "õ": "o", "ȯ": "o",
-        "ù": "u", "û": "u", "ü": "u", "ú": "u",
-        "ÿ": "y", "ý": "y"
-    })
-    return s.translate(accent_map)
 
 def normalize_and_clean_df(df: pd.DataFrame):
     df.columns = [col.strip().capitalize() for col in df.columns]
-    required_cols = {"Classe", "E-mail", "Nom", "Prénom"}
-    if not required_cols.issubset(df.columns):
-        missing = required_cols - set(df.columns)
-        raise ValueError(f"Colonnes manquantes : {missing}")
-    
     df = df[["Classe", "E-mail", "Nom", "Prénom"]].copy()
     df.columns = ["Classroom Name", "Member Email", "Nom", "Prénom"]
-
+    
     df["Classroom Name"] = df["Classroom Name"].fillna("").astype(str).str.replace(r"\s+","",regex=True).str.upper()
     df["Member Email"] = df["Member Email"].fillna("").astype(str).str.strip().str.replace(r"\s+","",regex=True)
-    df["Nom"] = df["Nom"].fillna("").astype(str).str.strip().str.replace(r"\s+"," ",regex=True).apply(remove_accents_and_cleanup)
-    df["Prénom"] = df["Prénom"].fillna("").astype(str).str.strip().str.replace(r"\s+"," ",regex=True).apply(remove_accents_and_cleanup)
-
+    df["Nom"] = df["Nom"].fillna("").astype(str).str.strip().apply(remove_accents_and_cleanup)
+    df["Prénom"] = df["Prénom"].fillna("").astype(str).str.strip().apply(remove_accents_and_cleanup)
     return df
 
-def process_dataframe(df: pd.DataFrame, classroom_email_mapping: dict):
-    df = normalize_and_clean_df(df)
-    valid_emails_df = df[df["Member Email"].str.endswith("@ism.edu.sn", na=False)].copy()
-    invalid_emails_df = df[~df["Member Email"].str.endswith("@ism.edu.sn", na=False)].copy()
-
-    valid_emails_df["Group Email [Required]"] = valid_emails_df["Classroom Name"].map(classroom_email_mapping)
-    mapped_df = valid_emails_df.dropna(subset=["Group Email [Required]"]).copy()
-    unmapped_df = valid_emails_df[valid_emails_df["Group Email [Required]"].isna()].copy()
-
-    mapped_export_df = mapped_df[["Group Email [Required]", "Member Email"]].copy()
-    mapped_export_df["Member Type"] = "USER"
-    mapped_export_df["Member Role"] = "MEMBER"
-
-    profile_df = valid_emails_df.copy()
-    profile_df["Nom d'utilisateur"] = profile_df["Member Email"]
-    profile_df["Adresse e-mail"] = profile_df["Member Email"]
-    profile_df["Nom"] = profile_df["Nom"]
-    # We keep the manual quotes so sanitize_csv_output can clean the resulting triple quotes
-    profile_df["Prénom"] = "\"" + profile_df["Prénom"] + "\""
-    profile_df["Nouveau mot de passe"] = "ismapps2025,,,,,,,,,,,,,,,,,1382"
-    profile_export_df = profile_df[["Nom d'utilisateur", "Nom", "Prénom", "Adresse e-mail", "Nouveau mot de passe"]]
-
-    return {
-        "mapped_export_df": mapped_export_df,
-        "mapped_df": mapped_df,
-        "unmapped_df": unmapped_df,
-        "invalid_emails_df": invalid_emails_df,
-        "profile_export_df": profile_export_df
-    }
-
 # -----------------------
-# UI (header / sidebar)
+# Sidebar & UI Header
 # -----------------------
-header_col1, header_col2 = st.columns([1, 4])
-with header_col1:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/b/b3/Apollo-kop%2C_objectnr_A_12979.jpg", width=64)
-with header_col2:
-    st.title("Minatholy")
-    st.markdown("Génère les exports pour Google Workspace et Blackboard (BLU).")
-
-st.markdown("---")
-
 with st.sidebar:
-    st.header("Paramètres")
-    selected_school = st.selectbox("Choisir l'école", SCHOOLS)
-    zip_opt = st.checkbox("Générer un ZIP contenant tous les fichiers", value=True)
+    st.image("https://upload.wikimedia.org/wikipedia/commons/b/b3/Apollo-kop%2C_objectnr_A_12979.jpg", width=80)
+    st.title("Minatholy Settings")
+    selected_school = st.selectbox("Sélectionner l'école", SCHOOLS)
+    zip_opt = st.checkbox("Générer Archive ZIP", value=True)
+    st.divider()
+    st.caption("v2.5 - CSV Sanitizer Enabled")
+
+st.title("🎓 ISM Data Processing")
+st.markdown(f"Génération automatique des fichiers Google & Blackboard pour **{selected_school}**.")
 
 # -----------------------
-# Main Logic
+# File Upload Zone
 # -----------------------
-st.subheader(f"Upload du fichier Excel pour : **{selected_school}**")
-uploaded_excel = st.file_uploader("Importer le fichier Excel (.xls/.xlsx)", type=["xls", "xlsx"])
+with st.container(border=True):
+    col_up1, col_up2 = st.columns([3, 1])
+    with col_up1:
+        uploaded_excel = st.file_uploader("Importer le fichier Excel des inscriptions", type=["xls", "xlsx"])
+    with col_up2:
+        st.write("##")
+        run = st.button("🚀 Lancer le traitement", type="primary", use_container_width=True)
 
-run = st.button("🚀 Lancer le traitement", type="primary")
+st.divider()
 
+# -----------------------
+# Main Execution Logic
+# -----------------------
 if run:
     if not uploaded_excel:
-        st.error("Veuillez uploader un fichier Excel.")
+        st.error("❌ Aucun fichier détecté.")
         st.stop()
 
-    school_dir = DATA_DIR / selected_school
-    emails_path = school_dir / "emails.txt"
-    cours_dir = school_dir / "CoursParClasse"
-    mapping_csv_path = school_dir / "mapping.csv"
+    with st.status("Traitement en cours...", expanded=True) as status:
+        # Load local data
+        school_dir = DATA_DIR / selected_school
+        admins = read_emails_txt(school_dir / "emails.txt")
+        cours_mapping = read_cours_mapping(school_dir / "CoursParClasse")
+        
+        # Mapping priority: local CSV > hardcoded SCHOOL_MAPPINGS
+        mapping_csv = school_dir / "mapping.csv"
+        if mapping_csv.exists():
+            dfm = pd.read_csv(mapping_csv).fillna("")
+            mapping = dict(zip(dfm.iloc[:,0].str.upper().str.replace(" ",""), dfm.iloc[:,1].str.strip()))
+        else:
+            mapping = {k.upper().replace(" ", ""): v for k, v in SCHOOL_MAPPINGS[selected_school].items()}
 
-    # Mapping logic
-    if mapping_csv_path.exists():
-        mapping = read_mapping_csv(mapping_csv_path)
-    else:
-        mapping = {k.upper().replace(" ", ""): v for k, v in SCHOOL_MAPPINGS[selected_school].items()}
+        st.write("✅ Mappings chargés.")
 
-    admins = read_emails_txt(emails_path)
-    classroom_course_mapping = read_cours_mapping(cours_dir)
+        try:
+            # Process Excel
+            raw_df = pd.read_excel(uploaded_excel, dtype=str)
+            df = normalize_and_clean_df(raw_df)
+            
+            valid_df = df[df["Member Email"].str.endswith("@ism.edu.sn", na=False)].copy()
+            valid_df["Group Email"] = valid_df["Classroom Name"].map(mapping)
+            
+            # 1. Google List
+            mapped_df = valid_df.dropna(subset=["Group Email"]).copy()
+            google_list = mapped_df[["Group Email", "Member Email"]].copy()
+            google_list.columns = ["Group Email [Required]", "Member Email"]
+            google_list["Member Type"] = "USER"
+            google_list["Member Role"] = "MEMBER"
 
-    try:
-        df = pd.read_excel(uploaded_excel, dtype=str)
-        results = process_dataframe(df, mapping)
-    except Exception as e:
-        st.error(f"Erreur : {e}")
-        st.stop()
+            # 2. Admins
+            admin_rows = [{"Group Email [Required]": g, "Member Email": a, "Member Type": "USER", "Member Role": "MANAGER"} 
+                          for g in set(mapping.values()) for a in admins]
+            admin_df = pd.DataFrame(admin_rows)
+            combined_google = pd.concat([google_list, admin_df], ignore_index=True)
 
-    # Admin Rows
-    admin_rows = []
-    for group_email in set(mapping.values()):
-        for admin_email in admins:
-            admin_rows.append({
-                "Group Email [Required]": group_email,
-                "Member Email": admin_email,
-                "Member Type": "USER",
-                "Member Role": "MANAGER"
-            })
-    admin_df = pd.DataFrame(admin_rows)
+            # 3. Profiles (The part with the fix)
+            profiles = valid_df.copy()
+            profiles["Prénom"] = "\"" + profiles["Prénom"] + "\"" # Manual wrap for sanitizer
+            profiles["Nouveau mot de passe"] = "ismapps2025,,,,,,,,,,,,,,,,,1382"
+            profile_export = profiles[["Member Email", "Nom", "Prénom", "Member Email", "Nouveau mot de passe"]]
+            profile_export.columns = ["Nom d'utilisateur", "Nom", "Prénom", "Adresse e-mail", "Nouveau mot de passe"]
 
-    combined = pd.concat([results["mapped_export_df"], admin_df], ignore_index=True) if not results["mapped_export_df"].empty else admin_df
+            # 4. Courses (Cross join)
+            course_rows = []
+            for _, row in mapped_df.iterrows():
+                for code in cours_mapping.get(row["Classroom Name"], []):
+                    course_rows.append([code, row["Member Email"], "", ""])
+            course_df = pd.DataFrame(course_rows)
 
-    # Course Inscriptions
-    course_rows = []
-    classes_sans_code = set()
-    for classe, group in results["mapped_df"].groupby("Classroom Name"):
-        emails = group["Member Email"].dropna().str.strip().unique()
-        codes = classroom_course_mapping.get(classe, [])
-        if not codes: classes_sans_code.add(classe)
-        for email in emails:
-            for code in codes:
-                course_rows.append([code, email, "", ""])
-    course_df = pd.DataFrame(course_rows)
+            # Convert to Sanitized Bytes
+            bytes_mise = sanitize_csv_output(combined_google)
+            bytes_admin = sanitize_csv_output(admin_df)
+            bytes_profils = sanitize_csv_output(profile_export, is_profile=True)
+            bytes_courses = sanitize_csv_output(course_df, header=False)
+            
+            report_text = f"Audit Report - {selected_school} - {datetime.now()}\nMapped: {len(mapped_df)}\nAdmin Groups: {len(admin_df)}"
+            b_report = BytesIO(report_text.encode("utf-8"))
 
-    # File Generation
-    now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    
-    bytes_mise = sanitize_csv_output(combined)
-    bytes_admin = sanitize_csv_output(admin_df)
-    bytes_profils = sanitize_csv_output(results["profile_export_df"], is_profile=True)
-    bytes_courses = sanitize_csv_output(course_df, header=False)
-    
-    # Report Text
-    report_text = f"Report — {selected_school} — {now_str}\n"
-    report_text += f"Mapped users: {len(results['mapped_df'])}\n"
-    report_text += f"Unmapped users: {len(results['unmapped_df'])}\n"
-    b_report = BytesIO(report_text.encode("utf-8"))
+            status.update(label="✅ Données prêtes !", state="complete", expanded=False)
+        except Exception as e:
+            st.error(f"Erreur : {e}")
+            st.stop()
 
-    # Downloads
-    st.success("✅ Traitement terminé")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.download_button("Télécharger → Liste Diffusion GW", bytes_mise, file_name=f"diffusion_{selected_school}.csv")
-        st.download_button("Télécharger → Liste de Diffusion Admins GW", bytes_admin, file_name=f"admins_{selected_school}.csv")
-        st.download_button("Télécharger → Création Profils BLU", bytes_profils, file_name=f"profils_blu_{selected_school}.csv")
-    with c2:
-        st.download_button("Télécharger → Inscriptions Cours BLU", bytes_courses, file_name=f"cours_{selected_school}.csv")
-        st.download_button("Télécharger → Rapport", b_report, file_name=f"rapport_{selected_school}.txt")
+    # -----------------------
+    # Output UI (Tabs)
+    # -----------------------
+    tab1, tab2, tab3 = st.tabs(["📥 Téléchargements", "🔍 Aperçu", "📋 Rapport"])
 
-    if zip_opt:
-        zip_buffer = BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("liste_diffusion_GW.csv", bytes_mise.getvalue())
-            zf.writestr("liste_diffusion_admins_GW.csv", bytes_admin.getvalue())
-            zf.writestr("creation_profils_BLU.csv", bytes_profils.getvalue())
-            zf.writestr("inscriptions_cours_en_ligne_BLU.csv", bytes_courses.getvalue())
-            zf.writestr("rapport.txt", report_text)
-        zip_buffer.seek(0)
-        st.download_button("📦 Télécharger tout en ZIP", zip_buffer, file_name=f"export_{selected_school}.zip")
+    with tab1:
+        st.subheader("Google Workspace (Groupes)")
+        c1, c2 = st.columns(2)
+        c1.download_button("📧 Mise à jour Listes", bytes_mise, file_name=f"google_list_{selected_school}.csv", use_container_width=True)
+        c2.download_button("🔑 Ajouter Admins", bytes_admin, file_name=f"admins_{selected_school}.csv", use_container_width=True)
+        
+        st.subheader("Learning Management (Blackboard)")
+        c3, c4 = st.columns(2)
+        c3.download_button("👤 Profils (Séquence Fixe)", bytes_profils, file_name=f"profils_blu_{selected_school}.csv", use_container_width=True)
+        c4.download_button("📚 Inscriptions Cours", bytes_courses, file_name=f"inscriptions_{selected_school}.csv", use_container_width=True)
+
+        if zip_opt:
+            st.divider()
+            z_buf = BytesIO()
+            with zipfile.ZipFile(z_buf, "w") as zf:
+                zf.writestr("liste_diffusion.csv", bytes_mise.getvalue())
+                zf.writestr("admins.csv", bytes_admin.getvalue())
+                zf.writestr("profils_blu.csv", bytes_profils.getvalue())
+                zf.writestr("inscriptions.csv", bytes_courses.getvalue())
+            z_buf.seek(0)
+            st.download_button("📦 Télécharger Archive Complète (ZIP)", z_buf, file_name=f"export_{selected_school}.zip", type="secondary", use_container_width=True)
+
+    with tab2:
+        st.write("Aperçu du fichier Profils (Formaté pour Blackboard) :")
+        st.dataframe(profile_export.head(10), use_container_width=True)
+
+    with tab3:
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("Étudiants Mappés", len(mapped_df))
+        col_m2.metric("Inscriptions Cours", len(course_df))
+        st.text_area("Audit Log", report_text, height=150)
