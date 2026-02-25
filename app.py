@@ -4,110 +4,146 @@ from datetime import datetime
 from io import BytesIO
 import zipfile
 
-# 1. Configuration de la page
-st.set_page_config(page_title="Minatholy V3.2", layout="wide")
+# ---------------------------------------------------------
+# 1. CONFIGURATION DU MAPPING (INTEGRÉ DIRECTEMENT)
+# ---------------------------------------------------------
+# On ne cherche plus st.secrets, on met les données ici :
+SCHOOL_MAPPINGS = {
+    "DROIT": {
+        "L1-JURISTED'ENTREPRISE": "lda1c-2025-2026@ism.edu.sn",
+        "L1-ADM.PUBLIQUE": "lda1c-2025-2026@ism.edu.sn",
+        "L1DroitPrivéFondamental": "lda1c-2025-2026@ism.edu.sn",
+        "LDA1-A": "lda1a-2025-2026@ism.edu.sn",
+        "LDA1-BILINGUE": "lda1bilingue-2025-2026@ism.edu.sn",
+        "LDA1-B": "lda1b-2025-2026@ism.edu.sn",
+        "LDA1-C": "lda1c-2025-2026@ism.edu.sn",
+        "LDA1-D": "lda1d-2025-2026@ism.edu.sn",
+        "LDA1-E": "lda1e-2025-2026@ism.edu.sn",
+        "LDA1-2R": "lda1-2r-2025-2026@ism.edu.sn",
+        "L2-DROITPRIVÉFONDAMENTAL": "l2droitprive-fondamental-2526@ism.edu.sn",
+        "L2ALBI-DROITGESTION": "l2albi-droitgestion-2526@ism.edu.sn",
+        "L2-JURISTED'ENTREPRISE": "l2juriste-dentreprise-2526@ism.edu.sn",
+        "LDA2-A": "lda2a-2025-2026@ism.edu.sn",
+        "LDA2-B": "lda2b-2025-2026@ism.edu.sn",
+        "LDA2-C": "lda2c-2025-2026@ism.edu.sn",
+        "LDA2-D": "lda2d-2025-2026@ism.edu.sn",
+        "LDA3-A": "lda3a-2025-2026@ism.edu.sn",
+        "LDA3-B": "lda3b-2025-2026@ism.edu.sn",
+        "LDA3-C": "lda3c-2025-2026@ism.edu.sn",
+        "LDA3-D": "lda3d-2025-2026@ism.edu.sn",
+        "LDA3-COURSDUSOIR": "lda3coursdusoir-2025-2026@ism.edu.sn",
+        "LICENCE3ALBIEXTERNE": "lda3ae-2025-2026@ism.edu.sn"
+    },
+    "MANAGEMENT": {
+        "LG1-ADMINISTRATIONDESAFFAIRES": "lg1-adm-affaires2025-2026@ism.edu.sn",
+        "LG1-AGRO": "lg1-agro2025-2026@ism.edu.sn",
+        "LG1-CIM": "lg1-cim2025-2026@ism.edu.sn",
+        "LG1G-CF": "lg1g-cf2025-2026@ism.edu.sn",
+        "LG1J-ORGA-GRH": "lg1j-orga-grh2025-2026@ism.edu.sn",
+        "LG2-ADMINISTRATIONDESAFFAIRES": "lg2-adm-affaires2025-2026@ism.edu.sn",
+        "LG3-MARKETINGETCOMMUNICATION": "lg3-marketing-communication2025-2026@ism.edu.sn"
+    },
+    "INGENIEUR": {
+        "L1-CPD": "l1cpd-2526@ism.edu.sn",
+        "L1-CDSD": "l1cdsd-2526@ism.edu.sn",
+        "L1-CYBERSÉCURITÉ": "l1ia-cyber-2526@ism.edu.sn",
+        "L1A-IA(IAGE&TTL)": "l1aia-2526@ism.edu.sn",
+        "L2-INTELLIGENCEARTIFICIELLE": "licence2ia2025-2026@ism.edu.sn",
+        "M1IDC-BIGDATA&DATASTRATÉGIE": "mba1bigdata-2526@ism.edu.sn"
+    },
+    "MADIBA": {
+        "JMI1": "jmi1-2526@ism.edu.sn",
+        "LCM-1": "lcm1-2526@ism.edu.sn",
+        "SPRI1-A": "spri1a-2526@ism.edu.sn"
+    },
+    "GRADUATE": {
+        "MASTER1-QHSE": "mba1qhse-2526@ism.edu.sn",
+        "MASTER1-ACG": "mba1acg-2526@ism.edu.sn",
+        "MASTER2-GCL": "mba2gcl-2526@ism.edu.sn"
+    }
+}
 
-# 2. Chargement du mapping depuis secrets.toml
-try:
-    SCHOOL_MAPPINGS = st.secrets["SCHOOL_MAPPINGS"]
-except Exception:
-    st.error("❌ Le fichier secrets.toml est manquant ou mal configuré.")
-    st.stop()
-
-def clean_data(df):
-    """
-    Cette fonction renomme 'E-mail' en 'Member Email' 
-    et nettoie les noms de colonnes.
-    """
-    # Supprime les espaces invisibles autour des noms de colonnes
+# ---------------------------------------------------------
+# 2. LOGIQUE DE NETTOYAGE DES COLONNES (FIX E-MAIL)
+# ---------------------------------------------------------
+def clean_and_fix_columns(df):
+    # Supprime les espaces dans les noms de colonnes
     df.columns = [str(c).strip() for c in df.columns]
     
-    # Dictionnaire de correspondance pour les variantes de noms
-    rename_dict = {}
+    mapping_colonnes = {
+        'Member Email': ['e-mail', 'email', 'identifiant', 'mail', 'login'],
+        'Classe': ['classe', 'class', 'groupe'],
+        'Nom': ['nom', 'last name'],
+        'Prénom': ['prénom', 'prenom', 'first name']
+    }
+    
+    new_names = {}
     for col in df.columns:
         c_low = col.lower()
-        if c_low in ['e-mail', 'email', 'identifiant', 'mail']:
-            rename_dict[col] = "Member Email"
-        if c_low in ['classe', 'class', 'groupe']:
-            rename_dict[col] = "Classe"
-            
-    return df.rename(columns=rename_dict)
+        for officiel, variantes in mapping_colonnes.items():
+            if any(v == c_low for v in variantes) or c_low == officiel.lower():
+                new_names[col] = officiel
+                break
+    return df.rename(columns=new_names)
 
-# --- INTERFACE ---
+# ---------------------------------------------------------
+# 3. INTERFACE UTILISATEUR STREAMLIT
+# ---------------------------------------------------------
+st.set_page_config(page_title="Minatholy V3.2", layout="wide")
 st.title("🛡️ Minatholy V3.2")
 
 with st.sidebar:
-    selected_school = st.selectbox("Sélectionnez l'école", list(SCHOOL_MAPPINGS.keys()))
-    uploaded_file = st.file_uploader("Upload du fichier Excel", type=["xlsx", "xls"])
-    admin_emails = st.text_area("Admins (Mailing List)", "marie-bernadette.ndione@groupeism.sn\nmar-sarr.ndiaye@groupeism.sn")
+    st.header("⚙️ Paramètres")
+    selected_school = st.selectbox("Choisir l'école", list(SCHOOL_MAPPINGS.keys()))
+    uploaded_file = st.file_uploader("Fichier Excel (XLSX, XLS)", type=["xlsx", "xls"])
+    admin_input = st.text_area("Managers (un par ligne)", "marie-bernadette.ndione@groupeism.sn\nmar-sarr.ndiaye@groupeism.sn")
 
 if uploaded_file:
-    # Lecture du fichier
+    # Lecture et nettoyage immédiat
     df_raw = pd.read_excel(uploaded_file)
+    df = clean_and_fix_columns(df_raw)
     
-    # NETTOYAGE (Le fix est ici)
-    df = clean_data(df_raw)
-    
-    # Vérification de sécurité avant de continuer
-    if "Member Email" not in df.columns:
-        st.error(f"❌ La colonne 'E-mail' n'a pas été détectée. Colonnes présentes : {list(df_raw.columns)}")
+    # Vérification des colonnes nécessaires
+    if "Member Email" not in df.columns or "Classe" not in df.columns:
+        st.error("❌ Colonnes 'E-mail' ou 'Classe' non détectées.")
+        st.write("Colonnes trouvées dans votre fichier :", list(df.columns))
         st.stop()
 
     if st.button("🚀 LANCER LE TRAITEMENT", type="primary"):
-        # Récupération du mapping de l'école choisie
         mapping = SCHOOL_MAPPINGS.get(selected_school, {})
         
-        # Nettoyage des données
-        df["Classe"] = df["Classe"].astype(str).str.strip()
+        # Nettoyage des données dans les cellules
+        df["Classe_Fix"] = df["Classe"].astype(str).str.strip()
         
-        # Ligne 77 (Corrigée par le renommage automatique plus haut)
+        # Filtrage des emails valides (Ligne 77 fixée ici)
         valid_df = df[df["Member Email"].str.contains("@", na=False)].copy()
+        valid_df["Group Email"] = valid_df["Classe_Fix"].map(mapping)
         
-        # Mapping des classes vers les emails de groupes
-        valid_df["Group Email"] = valid_df["Classe"].map(mapping)
-        
-        # --- PREPARATION DES FICHIERS ---
-        # Google Workspace
+        # --- GENERATION CSV GOOGLE GROUPS ---
         gw_df = valid_df.dropna(subset=["Group Email"])[["Group Email", "Member Email"]].copy()
         gw_df.columns = ["Group Email [Required]", "Member Email"]
-        gw_df["Member Type"] = "USER"
-        gw_df["Member Role"] = "MEMBER"
+        gw_df["Member Type"], gw_df["Member Role"] = "USER", "MEMBER"
         
-        # Ajout des admins
-        admins = [a.strip() for a in admin_emails.split("\n") if a.strip()]
-        admin_rows = []
-        for group in gw_df["Group Email [Required]"].unique():
-            for admin in admins:
-                admin_rows.append([group, admin, "USER", "MANAGER"])
+        # Ajout des managers
+        admins = [a.strip() for a in admin_input.split('\n') if a.strip()]
+        admin_data = []
+        for g_mail in gw_df["Group Email [Required]"].unique():
+            for a_mail in admins:
+                admin_data.append([g_mail, a_mail, "USER", "MANAGER"])
         
-        final_gw = pd.concat([gw_df, pd.DataFrame(admin_rows, columns=gw_df.columns)])
-
-        # Blackboard (Profils)
-        blu_df = pd.DataFrame({
-            "Nom d'utilisateur": valid_df["Member Email"],
-            "Nom": valid_df["Nom"].fillna("").str.upper(),
-            "Prénom": valid_df["Prénom"].fillna(""),
-            "Adresse e-mail": valid_df["Member Email"],
-            "Mot de passe": "ismapps2025"
-        })
+        final_gw = pd.concat([gw_df, pd.DataFrame(admin_data, columns=gw_df.columns)])
 
         # --- EXPORT ZIP ---
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zf:
             zf.writestr(f"Google_Groups_{selected_school}.csv", final_gw.to_csv(index=False, encoding="utf-8-sig"))
-            zf.writestr(f"Blackboard_Profils_{selected_school}.csv", blu_df.to_csv(index=False, encoding="utf-8-sig"))
-
-        st.success(f"✅ Traitement terminé pour {len(valid_df)} lignes.")
         
-        # Affichage des classes non mappées s'il y en a
-        unmapped = valid_df[valid_df["Group Email"].isna()]["Classe"].unique()
+        st.success(f"✅ Traitement réussi ! {len(valid_df)} étudiants traités.")
+        
+        # Rapport des classes non trouvées
+        unmapped = valid_df[valid_df["Group Email"].isna()]["Classe_Fix"].unique()
         if len(unmapped) > 0:
-            with st.expander("⚠️ Classes non trouvées dans le mapping"):
+            with st.expander("⚠️ Classes non reconnues"):
                 st.write(list(unmapped))
 
-        st.download_button(
-            "📥 Télécharger les résultats (ZIP)",
-            data=zip_buffer.getvalue(),
-            file_name=f"Minatholy_{selected_school}.zip",
-            mime="application/zip"
-        )
+        st.download_button("📥 Télécharger les fichiers (ZIP)", zip_buffer.getvalue(), f"Minatholy_{selected_school}.zip")
