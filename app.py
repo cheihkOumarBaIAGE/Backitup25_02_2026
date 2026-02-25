@@ -92,7 +92,37 @@ SCHOOL_MAPPINGS = {
     "MADIBA": {
         "JMI1": "jmi1-2526@ism.edu.sn",
         "LCM-1": "lcm1-2526@ism.edu.sn",
+        "LCMFULLENGLISH-1": "lcm1bilingue-2526@ism.edu.sn",
         "SPRI1-A": "spri1a-2526@ism.edu.sn",
+        "SPRI1-BILINGUE": "spri1bilingue-2526@ism.edu.sn",
+        "SPRI1-B": "spri1b-2526@ism.edu.sn",
+        "MLI-R2": "mlir2-2526@ism.edu.sn",
+        "JMI-2": "jmi2-2526@ism.edu.sn",
+        "LCM-2": "lcm2-2526@ism.edu.sn",
+        "SPRI2-A": "spri2a-2526@ism.edu.sn",
+        "SPRI2-B": "spri2b-2526@ism.edu.sn",
+        "JMI-3": "jmi3-2526@ism.edu.sn",
+        "LCM-3": "lcm3-2526@ism.edu.sn",
+        "SPRI3-A": "spri3a-2526@ism.edu.sn",
+        "SPRI3-B": "spri3b-2526@ism.edu.sn",
+        "SPRI3-C": "spri3c-2526@ism.edu.sn",
+        "MASTER1SCIENCEPOLITIQUEETRELATIONSINTERNATIONALES": "mba1spri-2526@ism.edu.sn",
+        "M1-SPRISOIR": "mba1sprisoir-2526@ism.edu.sn",
+        "MBA1-DIPLOMATIEETGÉOSTRATÉGIE": "mba1dg-2526@ism.edu.sn",
+        "MBA1-DIPLOMATIEETGÉOSTRATÉGIESOIR": "mba1dgsoir-2526@ism.edu.sn",
+        "MBA1-Gestiondeprojetsculturels": "mba1gpc-2526@ism.edu.sn",
+        "MBA1-CLRP": "mba1clrp-2526@ism.edu.sn",
+        "MBA1-CLRPSOIR": "mba1clrpsoir-2526@ism.edu.sn",
+        "MBA1-DGT": "mba1dgt-2526@ism.edu.sn",
+        "MBA1-EnvironnementetDéveloppementDurable": "mba1edd-2526@ism.edu.sn",
+        "MBA1-SPRIPAIXETSÉCURITÉ": "mba1sps-2526@ism.edu.sn",
+        "MASTER2SCIENCEPOLITIQUEETRELATIONSINTERNATIONALES": "mba2spri-2526@ism.edu.sn",
+        "MBA2-DGT": "mba2dgt-2526@ism.edu.sn",
+        "MBA2-CLRP": "mba2clrp-2526@ism.edu.sn",
+        "MBA2-CLRPSOIR": "mba2clrp-2526@ism.edu.sn",
+        "MBA2DIPLOMATIEETGÉOSTRATÉGIE": "mba2dg-2526@ism.edu.sn",
+        "MBA2-SPRIPAIXETSECURITE": "mba2sps-2526@ism.edu.sn",
+        "MBA2-GOUVERNANCEETMANAGEMENTPUBLIC": "mba2gouvernance.management.public-2526@ism.edu.sn",
     },
     "INGENIEUR": {
         "L1-CPD": "l1cpd-2526@ism.edu.sn",
@@ -105,17 +135,12 @@ SCHOOL_MAPPINGS = {
 # Helper Functions
 # -----------------------
 def sanitize_csv_output(df: pd.DataFrame, is_profile=False, header=True):
-    """
-    Export to CSV and performs text cleanup to fix triple quotes and passwords.
-    """
     b = BytesIO()
     df.to_csv(b, index=False, header=header, encoding="utf-8-sig")
     csv_text = b.getvalue().decode("utf-8-sig")
 
     if is_profile:
-        # Fix 1: Triple quotes """ to single "
         csv_text = csv_text.replace('"""', '"')
-        # Fix 2: Remove quotes around specific password with commas
         bad_pw = '"ismapps2025,,,,,,,,,,,,,,,,,1382"'
         good_pw = 'ismapps2025,,,,,,,,,,,,,,,,,1382'
         csv_text = csv_text.replace(bad_pw, good_pw)
@@ -156,22 +181,16 @@ def normalize_and_clean_df(df: pd.DataFrame):
     return df
 
 # -----------------------
-# Sidebar & UI Header
+# Sidebar & Header
 # -----------------------
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/commons/b/b3/Apollo-kop%2C_objectnr_A_12979.jpg", width=80)
     st.title("Minatholy Settings")
     selected_school = st.selectbox("Sélectionner l'école", SCHOOLS)
     zip_opt = st.checkbox("Générer Archive ZIP", value=True)
-    st.divider()
-    st.caption("v2.5 - CSV Sanitizer Enabled")
 
 st.title("🎓 ISM Data Processing")
-st.markdown(f"Génération automatique des fichiers Google & Blackboard pour **{selected_school}**.")
 
-# -----------------------
-# File Upload Zone
-# -----------------------
 with st.container(border=True):
     col_up1, col_up2 = st.columns([3, 1])
     with col_up1:
@@ -180,10 +199,8 @@ with st.container(border=True):
         st.write("##")
         run = st.button("🚀 Lancer le traitement", type="primary", use_container_width=True)
 
-st.divider()
-
 # -----------------------
-# Main Execution Logic
+# Execution Logic
 # -----------------------
 if run:
     if not uploaded_excel:
@@ -191,12 +208,10 @@ if run:
         st.stop()
 
     with st.status("Traitement en cours...", expanded=True) as status:
-        # Load local data
         school_dir = DATA_DIR / selected_school
         admins = read_emails_txt(school_dir / "emails.txt")
         cours_mapping = read_cours_mapping(school_dir / "CoursParClasse")
         
-        # Mapping priority: local CSV > hardcoded SCHOOL_MAPPINGS
         mapping_csv = school_dir / "mapping.csv"
         if mapping_csv.exists():
             dfm = pd.read_csv(mapping_csv).fillna("")
@@ -204,72 +219,111 @@ if run:
         else:
             mapping = {k.upper().replace(" ", ""): v for k, v in SCHOOL_MAPPINGS[selected_school].items()}
 
-        st.write("✅ Mappings chargés.")
-
         try:
-            # Process Excel
             raw_df = pd.read_excel(uploaded_excel, dtype=str)
             df = normalize_and_clean_df(raw_df)
             
-            valid_df = df[df["Member Email"].str.endswith("@ism.edu.sn", na=False)].copy()
-            valid_df["Group Email"] = valid_df["Classroom Name"].map(mapping)
+            # 1. Separate Email types
+            valid_emails_mask = df["Member Email"].str.endswith("@ism.edu.sn", na=False)
+            invalid_emails_list = df[~valid_emails_mask]["Member Email"].unique().tolist()
+            valid_df = df[valid_emails_mask].copy()
             
-            # 1. Google List
+            # 2. Apply Mapping
+            valid_df["Group Email"] = valid_df["Classroom Name"].map(mapping)
             mapped_df = valid_df.dropna(subset=["Group Email"]).copy()
+            unmapped_students_df = valid_df[valid_df["Group Email"].isna()].copy()
+            
+            # 3. Google Export
             google_list = mapped_df[["Group Email", "Member Email"]].copy()
             google_list.columns = ["Group Email [Required]", "Member Email"]
             google_list["Member Type"] = "USER"
             google_list["Member Role"] = "MEMBER"
 
-            # 2. Admins
+            # 4. Admins
             admin_rows = [{"Group Email [Required]": g, "Member Email": a, "Member Type": "USER", "Member Role": "MANAGER"} 
                           for g in set(mapping.values()) for a in admins]
             admin_df = pd.DataFrame(admin_rows)
             combined_google = pd.concat([google_list, admin_df], ignore_index=True)
 
-            # 3. Profiles (The part with the fix)
+            # 5. Profiles (Blackboard)
             profiles = valid_df.copy()
-            profiles["Prénom"] = "\"" + profiles["Prénom"] + "\"" # Manual wrap for sanitizer
+            profiles["Prénom"] = "\"" + profiles["Prénom"] + "\""
             profiles["Nouveau mot de passe"] = "ismapps2025,,,,,,,,,,,,,,,,,1382"
             profile_export = profiles[["Member Email", "Nom", "Prénom", "Member Email", "Nouveau mot de passe"]]
             profile_export.columns = ["Nom d'utilisateur", "Nom", "Prénom", "Adresse e-mail", "Nouveau mot de passe"]
 
-            # 4. Courses (Cross join)
+            # 6. Courses Enrollment
             course_rows = []
-            for _, row in mapped_df.iterrows():
-                for code in cours_mapping.get(row["Classroom Name"], []):
-                    course_rows.append([code, row["Member Email"], "", ""])
+            classes_sans_codes = set()
+            for classe in mapped_df["Classroom Name"].unique():
+                if classe not in cours_mapping or not cours_mapping[classe]:
+                    classes_sans_codes.add(classe)
+                
+                students_in_class = mapped_df[mapped_df["Classroom Name"] == classe]["Member Email"].unique()
+                codes = cours_mapping.get(classe, [])
+                for email in students_in_class:
+                    for code in codes:
+                        course_rows.append([code, email, "", ""])
             course_df = pd.DataFrame(course_rows)
 
-            # Convert to Sanitized Bytes
+            # --- GENERATE REPORT TEXT ---
+            now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            report = f"Report — {selected_school} — {now_str}\n\n"
+            
+            # Mapped Classes list
+            distinct_mapped = mapped_df[["Classroom Name", "Group Email"]].drop_duplicates().sort_values("Classroom Name")
+            report += f"Mapped classes: {len(distinct_mapped)}\n"
+            for _, row in distinct_mapped.iterrows():
+                report += f"- {row['Classroom Name']} -> {row['Group Email']}\n"
+            
+            # Unmapped Classes
+            unmapped_classes = unmapped_students_df["Classroom Name"].unique().tolist()
+            report += f"\nUnmapped classes ({len(unmapped_classes)}):\n"
+            for c in unmapped_classes:
+                report += f"- {c}\n"
+            
+            # Invalid Emails
+            report += f"\nInvalid emails ({len(invalid_emails_list)}):\n"
+            for m in invalid_emails_list:
+                report += f"- {m if m else '(Vide)'}\n"
+            
+            # Summary
+            report += f"\nSummary counts:\n"
+            report += f"- Utilisateurs mappés: {len(mapped_df)}\n"
+            report += f"- Utilisateurs non mappés: {len(unmapped_students_df)}\n"
+            report += f"- Emails ignorés: {len(df) - len(valid_df)}\n"
+            report += f"- Classes sans codes: {len(classes_sans_codes)}\n"
+            
+            # Classes sans codes list
+            report += f"\nClasses sans codes:\n"
+            for c in sorted(list(classes_sans_codes)):
+                report += f"- {c}\n"
+
+            # Prepare downloads
             bytes_mise = sanitize_csv_output(combined_google)
             bytes_admin = sanitize_csv_output(admin_df)
             bytes_profils = sanitize_csv_output(profile_export, is_profile=True)
             bytes_courses = sanitize_csv_output(course_df, header=False)
-            
-            report_text = f"Audit Report - {selected_school} - {datetime.now()}\nMapped: {len(mapped_df)}\nAdmin Groups: {len(admin_df)}"
-            b_report = BytesIO(report_text.encode("utf-8"))
+            b_report = BytesIO(report.encode("utf-8"))
 
-            status.update(label="✅ Données prêtes !", state="complete", expanded=False)
+            status.update(label="✅ Traitement réussi !", state="complete", expanded=False)
         except Exception as e:
-            st.error(f"Erreur : {e}")
+            st.error(f"Erreur fatale : {e}")
             st.stop()
 
-    # -----------------------
-    # Output UI (Tabs)
-    # -----------------------
-    tab1, tab2, tab3 = st.tabs(["📥 Téléchargements", "🔍 Aperçu", "📋 Rapport"])
+    # --- UI RESULTS ---
+    tab1, tab2, tab3 = st.tabs(["📥 Téléchargements", "🔍 Aperçu Données", "📊 Rapport d'audit"])
 
     with tab1:
-        st.subheader("Google Workspace (Groupes)")
-        c1, c2 = st.columns(2)
-        c1.download_button("📧 Mise à jour Listes", bytes_mise, file_name=f"google_list_{selected_school}.csv", use_container_width=True)
-        c2.download_button("🔑 Ajouter Admins", bytes_admin, file_name=f"admins_{selected_school}.csv", use_container_width=True)
+        st.subheader("Fichiers de sortie")
+        m1, m2, m3 = st.columns(3)
+        m1.download_button("📧 Listes Google", bytes_mise, file_name=f"diffusion_{selected_school}.csv", use_container_width=True)
+        m2.download_button("🔑 Admins Google", bytes_admin, file_name=f"admins_{selected_school}.csv", use_container_width=True)
+        m3.download_button("👤 Profils Blackboard", bytes_profils, file_name=f"profils_blu_{selected_school}.csv", use_container_width=True)
         
-        st.subheader("Learning Management (Blackboard)")
-        c3, c4 = st.columns(2)
-        c3.download_button("👤 Profils (Séquence Fixe)", bytes_profils, file_name=f"profils_blu_{selected_school}.csv", use_container_width=True)
-        c4.download_button("📚 Inscriptions Cours", bytes_courses, file_name=f"inscriptions_{selected_school}.csv", use_container_width=True)
+        c1, c2 = st.columns(2)
+        c1.download_button("📚 Inscriptions Cours", bytes_courses, file_name=f"cours_{selected_school}.csv", use_container_width=True)
+        c2.download_button("📝 Rapport Complet (TXT)", b_report, file_name=f"rapport_{selected_school}_{now_str}.txt", use_container_width=True)
 
         if zip_opt:
             st.divider()
@@ -277,17 +331,14 @@ if run:
             with zipfile.ZipFile(z_buf, "w") as zf:
                 zf.writestr("liste_diffusion.csv", bytes_mise.getvalue())
                 zf.writestr("admins.csv", bytes_admin.getvalue())
-                zf.writestr("profils_blu.csv", bytes_profils.getvalue())
-                zf.writestr("inscriptions.csv", bytes_courses.getvalue())
+                zf.writestr("profils_blackboard.csv", bytes_profils.getvalue())
+                zf.writestr("inscriptions_cours.csv", bytes_courses.getvalue())
+                zf.writestr("rapport.txt", report)
             z_buf.seek(0)
-            st.download_button("📦 Télécharger Archive Complète (ZIP)", z_buf, file_name=f"export_{selected_school}.zip", type="secondary", use_container_width=True)
+            st.download_button("📦 Télécharger tout (ZIP)", z_buf, file_name=f"export_{selected_school}.zip", type="primary", use_container_width=True)
 
     with tab2:
-        st.write("Aperçu du fichier Profils (Formaté pour Blackboard) :")
-        st.dataframe(profile_export.head(10), use_container_width=True)
+        st.dataframe(profile_export.head(50), use_container_width=True)
 
     with tab3:
-        col_m1, col_m2 = st.columns(2)
-        col_m1.metric("Étudiants Mappés", len(mapped_df))
-        col_m2.metric("Inscriptions Cours", len(course_df))
-        st.text_area("Audit Log", report_text, height=150)
+        st.text_area("Aperçu du rapport", report, height=400)
