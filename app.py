@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from io import BytesIO
 import zipfile
+import csv
 
 # -----------------------
 # Page config & constants
@@ -371,12 +372,18 @@ def process_dataframe(df: pd.DataFrame, classroom_email_mapping: dict):
     mapped_export_df["Member Type"] = "USER"
     mapped_export_df["Member Role"] = "MEMBER"
 
+    # --- PROFILE EXPORT LOGIC ---
     profile_df = valid_emails_df.copy()
     profile_df["Nom d'utilisateur"] = profile_df["Member Email"]
     profile_df["Adresse e-mail"] = profile_df["Member Email"]
-    profile_df["Nom"] = profile_df["Nom"]
-    profile_df["Prénom"] = "\"" + profile_df["Prénom"] + "\""
+    
+    # We manually wrap Nom and Prénom in single quotes
+    profile_df["Nom"] = '"' + profile_df["Nom"] + '"'
+    profile_df["Prénom"] = '"' + profile_df["Prénom"] + '"'
+    
+    # Password remains a raw string
     profile_df["Nouveau mot de passe"] = "ismapps2025,,,,,,,,,,,,,,,,,1382"
+    
     profile_export_df = profile_df[["Nom d'utilisateur", "Nom", "Prénom", "Adresse e-mail", "Nouveau mot de passe"]]
 
     return {
@@ -387,6 +394,7 @@ def process_dataframe(df: pd.DataFrame, classroom_email_mapping: dict):
         "profile_export_df": profile_export_df
     }
 
+    
 def df_to_bytes(df_obj: pd.DataFrame, index=False, header=True, encoding="utf-8-sig"):
     b = BytesIO()
     df_obj.to_csv(b, index=index, header=header, encoding=encoding)
@@ -548,14 +556,22 @@ if run:
     report_text = "\n".join(report_lines)
 
     # bytes
-    def make_bytes(obj):
-        b = BytesIO()
-        if isinstance(obj, pd.DataFrame):
-            obj.to_csv(b, index=False, header=True, encoding="utf-8-sig")
-        else:
-            b.write(str(obj).encode("utf-8"))
-        b.seek(0)
-        return b
+    def make_bytes(obj, quoting_mode=csv.QUOTE_MINIMAL):
+    b = BytesIO()
+    if isinstance(obj, pd.DataFrame):
+        obj.to_csv(
+            b, 
+            index=False, 
+            header=True, 
+            encoding="utf-8-sig",
+            quoting=quoting_mode,
+            # escapechar is required when quoting=csv.QUOTE_NONE
+            escapechar=" " if quoting_mode == csv.QUOTE_NONE else None
+        )
+    else:
+        b.write(str(obj).encode("utf-8"))
+    b.seek(0)
+    return b
 
     fn_mise = f"mise_a_jour_liste_de_diffusion_GW_{selected_school}_{now_str}.csv"
     fn_admin = f"ajouter_membres_admin_GW_{selected_school}_{now_str}.csv"
