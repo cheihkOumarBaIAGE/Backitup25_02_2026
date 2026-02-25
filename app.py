@@ -557,16 +557,15 @@ if run:
 
     # bytes
     def make_bytes(obj, quoting_mode=csv.QUOTE_MINIMAL):
-    b = BytesIO()
-    if isinstance(obj, pd.DataFrame):
-        obj.to_csv(
-            b, 
-            index=False, 
-            header=True, 
-            encoding="utf-8-sig",
-            quoting=quoting_mode,
-            # escapechar is required when quoting=csv.QUOTE_NONE
-            escapechar=" " if quoting_mode == csv.QUOTE_NONE else None
+        b = BytesIO()  # This line must be indented exactly 4 spaces
+        if isinstance(obj, pd.DataFrame):
+            obj.to_csv(
+                b, 
+                index=False, 
+                header=True, 
+                encoding="utf-8-sig",
+                quoting=quoting_mode,
+                escapechar=" " if quoting_mode == csv.QUOTE_NONE else None
         )
     else:
         b.write(str(obj).encode("utf-8"))
