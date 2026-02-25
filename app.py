@@ -5,9 +5,8 @@ from io import BytesIO
 import zipfile
 
 # ---------------------------------------------------------
-# 1. CONFIGURATION DU MAPPING (INTEGRÉ DIRECTEMENT)
+# 1. MAPPING COMPLET (Directement intégré pour GitHub)
 # ---------------------------------------------------------
-# On ne cherche plus st.secrets, on met les données ici :
 SCHOOL_MAPPINGS = {
     "DROIT": {
         "L1-JURISTED'ENTREPRISE": "lda1c-2025-2026@ism.edu.sn",
@@ -38,7 +37,6 @@ SCHOOL_MAPPINGS = {
         "LG1-ADMINISTRATIONDESAFFAIRES": "lg1-adm-affaires2025-2026@ism.edu.sn",
         "LG1-AGRO": "lg1-agro2025-2026@ism.edu.sn",
         "LG1-CIM": "lg1-cim2025-2026@ism.edu.sn",
-        "LG1G-CF": "lg1g-cf2025-2026@ism.edu.sn",
         "LG1J-ORGA-GRH": "lg1j-orga-grh2025-2026@ism.edu.sn",
         "LG2-ADMINISTRATIONDESAFFAIRES": "lg2-adm-affaires2025-2026@ism.edu.sn",
         "LG3-MARKETINGETCOMMUNICATION": "lg3-marketing-communication2025-2026@ism.edu.sn"
@@ -50,100 +48,78 @@ SCHOOL_MAPPINGS = {
         "L1A-IA(IAGE&TTL)": "l1aia-2526@ism.edu.sn",
         "L2-INTELLIGENCEARTIFICIELLE": "licence2ia2025-2026@ism.edu.sn",
         "M1IDC-BIGDATA&DATASTRATÉGIE": "mba1bigdata-2526@ism.edu.sn"
-    },
-    "MADIBA": {
-        "JMI1": "jmi1-2526@ism.edu.sn",
-        "LCM-1": "lcm1-2526@ism.edu.sn",
-        "SPRI1-A": "spri1a-2526@ism.edu.sn"
-    },
-    "GRADUATE": {
-        "MASTER1-QHSE": "mba1qhse-2526@ism.edu.sn",
-        "MASTER1-ACG": "mba1acg-2526@ism.edu.sn",
-        "MASTER2-GCL": "mba2gcl-2526@ism.edu.sn"
     }
 }
 
 # ---------------------------------------------------------
-# 2. LOGIQUE DE NETTOYAGE DES COLONNES (FIX E-MAIL)
+# 2. FONCTION DE NETTOYAGE ROBUSTE
 # ---------------------------------------------------------
-def clean_and_fix_columns(df):
-    # Supprime les espaces dans les noms de colonnes
+def clean_and_prepare(df):
+    # Nettoyage des noms de colonnes (espaces invisibles)
     df.columns = [str(c).strip() for c in df.columns]
     
-    mapping_colonnes = {
-        'Member Email': ['e-mail', 'email', 'identifiant', 'mail', 'login'],
-        'Classe': ['classe', 'class', 'groupe'],
-        'Nom': ['nom', 'last name'],
-        'Prénom': ['prénom', 'prenom', 'first name']
-    }
-    
-    new_names = {}
+    # Correction automatique si "E-mail" est utilisé
+    rename_map = {}
     for col in df.columns:
-        c_low = col.lower()
-        for officiel, variantes in mapping_colonnes.items():
-            if any(v == c_low for v in variantes) or c_low == officiel.lower():
-                new_names[col] = officiel
-                break
-    return df.rename(columns=new_names)
+        if col.lower() in ["e-mail", "email", "mail", "identifiant"]:
+            rename_map[col] = "Member Email"
+    
+    return df.rename(columns=rename_map)
 
 # ---------------------------------------------------------
-# 3. INTERFACE UTILISATEUR STREAMLIT
+# 3. INTERFACE STREAMLIT
 # ---------------------------------------------------------
 st.set_page_config(page_title="Minatholy V3.2", layout="wide")
 st.title("🛡️ Minatholy V3.2")
 
 with st.sidebar:
-    st.header("⚙️ Paramètres")
-    selected_school = st.selectbox("Choisir l'école", list(SCHOOL_MAPPINGS.keys()))
-    uploaded_file = st.file_uploader("Fichier Excel (XLSX, XLS)", type=["xlsx", "xls"])
-    admin_input = st.text_area("Managers (un par ligne)", "marie-bernadette.ndione@groupeism.sn\nmar-sarr.ndiaye@groupeism.sn")
+    school = st.selectbox("Ecole", list(SCHOOL_MAPPINGS.keys()))
+    file = st.file_uploader("Upload Excel", type=["xlsx", "xls"])
+    admins = st.text_area("Managers", "marie-bernadette.ndione@groupeism.sn\nmar-sarr.ndiaye@groupeism.sn")
 
-if uploaded_file:
-    # Lecture et nettoyage immédiat
-    df_raw = pd.read_excel(uploaded_file)
-    df = clean_and_fix_columns(df_raw)
+if file:
+    df = clean_and_prepare(pd.read_excel(file))
     
-    # Vérification des colonnes nécessaires
+    # Vérification que les colonnes Classe et Member Email (ex E-mail) existent
     if "Member Email" not in df.columns or "Classe" not in df.columns:
-        st.error("❌ Colonnes 'E-mail' ou 'Classe' non détectées.")
-        st.write("Colonnes trouvées dans votre fichier :", list(df.columns))
+        st.error("❌ Colonnes manquantes ! Vérifiez que votre Excel contient bien 'Classe' et 'E-mail'.")
+        st.write("Colonnes détectées :", list(df.columns))
         st.stop()
 
-    if st.button("🚀 LANCER LE TRAITEMENT", type="primary"):
-        mapping = SCHOOL_MAPPINGS.get(selected_school, {})
+    if st.button("🚀 TRAITER LE FICHIER"):
+        mapping = SCHOOL_MAPPINGS.get(school, {})
         
-        # Nettoyage des données dans les cellules
-        df["Classe_Fix"] = df["Classe"].astype(str).str.strip()
+        # Nettoyage des données
+        df["Classe_Clean"] = df["Classe"].astype(str).str.strip()
         
-        # Filtrage des emails valides (Ligne 77 fixée ici)
+        # Filtrage des lignes valides
         valid_df = df[df["Member Email"].str.contains("@", na=False)].copy()
-        valid_df["Group Email"] = valid_df["Classe_Fix"].map(mapping)
+        valid_df["Group Email"] = valid_df["Classe_Clean"].map(mapping)
         
-        # --- GENERATION CSV GOOGLE GROUPS ---
-        gw_df = valid_df.dropna(subset=["Group Email"])[["Group Email", "Member Email"]].copy()
-        gw_df.columns = ["Group Email [Required]", "Member Email"]
-        gw_df["Member Type"], gw_df["Member Role"] = "USER", "MEMBER"
+        # --- FICHIER GOOGLE GROUPS ---
+        gw = valid_df.dropna(subset=["Group Email"])[["Group Email", "Member Email"]].copy()
+        gw.columns = ["Group Email [Required]", "Member Email"]
+        gw["Member Type"], gw["Member Role"] = "USER", "MEMBER"
         
-        # Ajout des managers
-        admins = [a.strip() for a in admin_input.split('\n') if a.strip()]
-        admin_data = []
-        for g_mail in gw_df["Group Email [Required]"].unique():
-            for a_mail in admins:
-                admin_data.append([g_mail, a_mail, "USER", "MANAGER"])
-        
-        final_gw = pd.concat([gw_df, pd.DataFrame(admin_data, columns=gw_df.columns)])
+        # Ajout des admins
+        admin_list = [a.strip() for a in admins.split("\n") if a.strip()]
+        admin_rows = []
+        for g in gw["Group Email [Required]"].unique():
+            for a in admin_list:
+                admin_rows.append([g, a, "USER", "MANAGER"])
+        final_gw = pd.concat([gw, pd.DataFrame(admin_rows, columns=gw.columns)])
 
-        # --- EXPORT ZIP ---
-        zip_buffer = BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w") as zf:
-            zf.writestr(f"Google_Groups_{selected_school}.csv", final_gw.to_csv(index=False, encoding="utf-8-sig"))
+        # --- EXPORT ---
+        buf = BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr(f"Google_Groups_{school}.csv", final_gw.to_csv(index=False, encoding="utf-8-sig"))
+            
+        st.success(f"✅ Terminé ! {len(valid_df)} étudiants identifiés.")
         
-        st.success(f"✅ Traitement réussi ! {len(valid_df)} étudiants traités.")
-        
-        # Rapport des classes non trouvées
-        unmapped = valid_df[valid_df["Group Email"].isna()]["Classe_Fix"].unique()
+        # Affichage des classes non trouvées pour correction
+        unmapped = valid_df[valid_df["Group Email"].isna()]["Classe_Clean"].unique()
         if len(unmapped) > 0:
-            with st.expander("⚠️ Classes non reconnues"):
+            with st.expander("⚠️ Classes non reconnues dans le mapping"):
                 st.write(list(unmapped))
 
-        st.download_button("📥 Télécharger les fichiers (ZIP)", zip_buffer.getvalue(), f"Minatholy_{selected_school}.zip")
+        st.download_button("📥 Télécharger ZIP", buf.getvalue(), f"Minatholy_{school}.zip")
