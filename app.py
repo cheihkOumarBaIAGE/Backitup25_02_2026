@@ -59,7 +59,7 @@ with tab_proc:
     with col_l:
         st.subheader("Configuration")
         school_choice = st.selectbox("Sélectionner l'école", list(SCHOOL_MAPPING.keys()))
-        uploaded_file = st.file_uploader("Charger le fichier Excel étudiant", type=['xlsx'])
+        uploaded_file = st.file_uploader("Charger le fichier Excel étudiant", type=['xlsx', 'xls'])
     
     if uploaded_file and school_choice:
         with st.status("Traitement des données en cours...", expanded=True) as status:
