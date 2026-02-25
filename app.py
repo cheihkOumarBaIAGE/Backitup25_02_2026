@@ -1,519 +1,146 @@
-# app.py
 import streamlit as st
 import pandas as pd
-from pathlib import Path
-from datetime import datetime
-from io import BytesIO
+import io
 import zipfile
-import csv  # Added for formatting constants
+from datetime import datetime
+import os
 
-# -----------------------
-# Page config & constants
-# -----------------------
-st.set_page_config(page_title="Minatholy V1.5", layout="wide", initial_sidebar_state="expanded")
+# --- CONFIGURATION DE LA PAGE ---
+st.set_page_config(
+    page_title="Minatholy V2.0", 
+    layout="wide", 
+    page_icon="🛡️"
+)
 
-SCHOOLS = ["INGENIEUR", "GRADUATE", "MANAGEMENT", "DROIT", "MADIBA"]
-DATA_DIR = Path("data")
+# --- CHARGEMENT SÉCURISÉ DES SECRETS ---
+try:
+    # On récupère les données du fichier .streamlit/secrets.toml
+    SCHOOL_MAPPING = st.secrets["mappings"]
+    BB_PASSWORD = st.secrets["general"]["password"]
+except Exception as e:
+    st.error("❌ Erreur de configuration : Le fichier secrets.toml est manquant ou mal rempli.")
+    st.info("Vérifie que tu as bien créé le dossier '.streamlit' et le fichier 'secrets.toml'.")
+    st.stop()
 
-# -----------------------
-# Mappings fournis (par école)
-# -----------------------
-SCHOOL_MAPPINGS = {
-    "DROIT": {
-        "L1-JURISTED'ENTREPRISE": "lda1c-2025-2026@ism.edu.sn",
-        "L1-ADM.PUBLIQUE": "lda1c-2025-2026@ism.edu.sn",
-        "L1DroitPrivéFondamental": "lda1c-2025-2026@ism.edu.sn",
-        "LDA1-A": "lda1a-2025-2026@ism.edu.sn",
-        "LDA1-BILINGUE": "lda1bilingue-2025-2026@ism.edu.sn",
-        "LDA1-B": "lda1b-2025-2026@ism.edu.sn",
-        "LDA1-C": "lda1c-2025-2026@ism.edu.sn",
-        "LDA1-D": "lda1d-2025-2026@ism.edu.sn",
-        "LDA1-E": "lda1e-2025-2026@ism.edu.sn",
-        "LDA1-2R": "lda1-2r-2025-2026@ism.edu.sn",
-        "L2-DROITPRIVÉFONDAMENTAL": "l2droitprive-fondamental-2526@ism.edu.sn",
-        "L2ALBI-DROITGESTION": "l2albi-droitgestion-2526@ism.edu.sn",
-        "L2-JURISTED'ENTREPRISE": "l2juriste-dentreprise-2526@ism.edu.sn",
-        "LDA2-A": "lda2a-2025-2026@ism.edu.sn",
-        "LDA2-B": "lda2b-2025-2026@ism.edu.sn",
-        "LDA2-C": "lda2c-2025-2026@ism.edu.sn",
-        "LDA2-D": "lda2d-2025-2026@ism.edu.sn",
-        "LDA3-A": "lda3a-2025-2026@ism.edu.sn",
-        "LDA3-B": "lda3b-2025-2026@ism.edu.sn",
-        "LDA3-C": "lda3c-2025-2026@ism.edu.sn",
-        "LDA3-D": "lda3d-2025-2026@ism.edu.sn",
-        "LDA3-COURSDUSOIR": "lda3coursdusoir-2025-2026@ism.edu.sn",
-        "LICENCE3ALBIEXTERNE": "lda3ae-2025-2026@ism.edu.sn",
-        "MBA1-ESGJURISTED'ENTREPRISE": "mba1jusristedentreprise-2526@ism.edu.sn",
-        "M1-JURISTED'AFFAIRES,ASSURANCE&COMPLIANCE": "mba1jaac-2526@ism.edu.sn",
-        "MASTER1-PASSATIONDESMARCHÉS": "mba1passationdesmarches-2526@ism.edu.sn",
-        "MASTER1-PASSATIONDESMARCHÉSSOIR": "mba1passationdesmarchessoir-2526@ism.edu.sn",
-        "MASTER1-DROITDESAFFAIRES": "mba1droitdesaffaires-2526@ism.edu.sn",
-        "MASTER1-DROITDESAFFAIRESSOIR": "mba1droitdesaffairessoir-2526@ism.edu.sn",
-        "MASTER1DROITDESAFFAIRESETBUSINESSPARTNERDEELIJE": "mba1droitdesaffaires.business-2526@ism.edu.sn",
-        "MBA1-DROITINTERNATIONALDESAFFAIRES": "mba1dia-2526@ism.edu.sn",
-        "MASTER1-FISCALITÉ": "mba1fiscalite-2526@ism.edu.sn",
-        "MASTER1-FISCALITESOIR": "mba1fiscalitesoir-2526@ism.edu.sn",
-        "MASTER1-FISCALITECOURSDUSOIR": "mba1fiscalitesoir-2526@ism.edu.sn",
-        "MBA1-DGEM": "mba1dgem-2526@ism.edu.sn",
-        "MBA1-DROITDEL'ENTREPRISE": "mba1delentreprise-2526@ism.edu.sn",
-        "MBA1-DROITMARITIMEETACTIVITÉSPORTUAIRES": "mba1droitmaritime.activiteportuaires-2526@ism.edu.sn",
-        "MASTER1-DROITNOTARIALETGESTIONDUPATRIMOINE": "mba1droitnotarial.gestionpatrimoine-2526@ism.edu.sn",
-        "MBA2-DROITDEL'ENTREPRISE": "mba2delentreprise-2526@ism.edu.sn",
-        "MBA1-DROITSINTERNATIONALESDESAFFAIRES": "mba1dia-2526@ism.edu.sn",
-        "M1-JURISTEDEBANQUEASSURANCE&COMPLIANCE": "mba1jbac-2526@ism.edu.sn",
-        "M1-SOIRJURISTEDEBANQUEASSURANCE&COMPLIANCE": "mba1jbacsoir-2526@ism.edu.sn",
-        "MBA2-ESGJURISTED'ENTREPRISE": "mba2jusristedentreprise-2526@ism.edu.sn",
-        "MASTER2-PASSATIONDESMARCHÉS": "mba2passationdesmarches-2526@ism.edu.sn",
-        "MASTER2-PASSATIONDESMARCHÉSSOIR": "mba2passationdesmarchessoir-2526@ism.edu.sn",
-        "MASTER2-DROITDESAFFAIRES": "mba2droitdesaffaires-2526@ism.edu.sn",
-        "MASTER2-DROITDESAFFAIRESCOURSDUSOIR": "mba2droitdesaffairessoir-2526@ism.edu.sn",
-        "MASTER2-FISCALITÉ": "mba2fiscalite-2526@ism.edu.sn",
-        "MASTER2-FISCALITECOURSDUSOIR": "mba2fiscalitesoir-2526@ism.edu.sn",
-        "MBA2-DGEM": "mba2dgem-2526@ism.edu.sn",
-        "MBA2-DROITMARITIMEETACTIVITÉSPORTUAIRES": "mba2droitmaritime.activiteportuaires-2526@ism.edu.sn",
-        "MBA2-DROITNOTARIALETGESTIONDUPATRIMOINE": "mba2droitnotarial.gestionpatrimoine-2526@ism.edu.sn",
-        "MBA2-DROITINTERNATIONALDESAFFAIRES": "mba2dia-2526@ism.edu.sn",
-        "M2-JURISTEDEBANQUEASSURANCE&COMPLIANCE": "mba2jbac-2526@ism.edu.sn",
-    },
-    "MANAGEMENT": {
-        "LG1-ADMINISTRATIONDESAFFAIRES": "lg1-adm-affaires2025-2026@ism.edu.sn",
-        "LG1-ADMINISTRATIONDESAFFAIRESB": "lg1-adm-affairesb2025-2026@ism.edu.sn",
-        "LG1-AGRO": "lg1-agro2025-2026@ism.edu.sn",
-        "LG1-AGRO-R2": "lg1-agro2025-2026@ism.edu.sn",
-        "LG1-ADMINISTRATIONDESAFFAIRES-R2": "lg1-adm-affaires-2r2025-2026@ism.edu.sn",
-        "LG1-MI-R2": "lg1-mi-2r2025-2026@ism.edu.sn",
-        "LG1-ORGA-GRH-R2": "lg1j-orga-grh-2r2025-2026@ism.edu.sn",
-        "LG1-CIM": "lg1-cim2025-2026@ism.edu.sn",
-        "LG1-CIMB": "lg1b-cim2025-2026@ism.edu.sn",
-        "LG1D-MI": "lg1d-mi2025-2026@ism.edu.sn",
-        "LG1E-MI": "lg1e-mi2025-2026@ism.edu.sn",
-        "LG1-CF-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1-CF-R2B": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1-CIM-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1-MARKETINGETCOMMUNICATION-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1-QHSE-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG1G-CF": "lg1g-cf2025-2026@ism.edu.sn",
-        "LG1H-CF": "lg1h-cf2025-2026@ism.edu.sn",
-        "LG1I-CF": "lg1i-cf2025-2026@ism.edu.sn",
-        "LG1J-ORGA-GRH": "lg1j-orga-grh2025-2026@ism.edu.sn",
-        "LG1J-ORGA-GRHB": "lg1j-orga-grh-b2025-2026@ism.edu.sn",
-        "LG1K-CF": "lg1k-cf2025-2026@ism.edu.sn",
-        "LG1L-CF": "lg1l-cf2025-2026@ism.edu.sn",
-        "LG1-MARKETINGETCOMMUNICATION": "lg1-marketing-communication2025-2026@ism.edu.sn",
-        "LG1-MIFULLENGLISH": "lg1-mi-full-english2025-2026@ism.edu.sn",
-        "LG1-MIFULLENGLISH-R2": "lg1-mi-full-english-2r2025-2026@ism.edu.sn",
-        "LG1-QHSE": "lg1-qhse2025-2026@ism.edu.sn",
-        "LG1-R2": "lg1-2r2025-2026@ism.edu.sn",
-        "LG2-CIMB": "lg2b-cim2025-2026@ism.edu.sn",
-        "LG2-AGRO": "lg2-agro2025-2026@ism.edu.sn",
-        "LG2B-ORGA-GRH": "lg2b-orga-grh2025-2026@ism.edu.sn",
-        "LG2-CIM": "lg2-cim2025-2026@ism.edu.sn",
-        "LG2D-MI": "lg2d-mi2025-2026@ism.edu.sn",
-        "LG2E-MI": "lg2e-mi2025-2026@ism.edu.sn",
-        "LG2G-CF": "lg2g-cf2025-2026@ism.edu.sn",
-        "LG2H-CF": "lg2h-cf2025-2026@ism.edu.sn",
-        "LG2I-CF": "lg2i-cf2025-2026@ism.edu.sn",
-        "LG2J-ORGA-GRH": "lg2j-orga-grh2025-2026@ism.edu.sn",
-        "LG2K-CF": "lg2k-cf2025-2026@ism.edu.sn",
-        "LG2L-CF": "lg2l-cf2025-2026@ism.edu.sn",
-        "LG2-MARKETINGETCOMMUNICATION": "lg2-marketing-communication2025-2026@ism.edu.sn",
-        "LG2-MIFULLENGLISH": "lg2-mi-full-english2025-2026@ism.edu.sn",
-        "LG2-QHSE": "lg2-qhse2025-2026@ism.edu.sn",
-        "LG2-ADMINISTRATIONDESAFFAIRES": "lg2-adm-affaires2025-2026@ism.edu.sn",
-        "LG2-ADMINISTRATIONDESAFFAIRESB": "lg2-adm-affairesb2025-2026@ism.edu.sn",
-        "LG3-AGRO": "lg3-agro2025-2026@ism.edu.sn",
-        "LG3-MCI": "lg3-cim2025-2026@ism.edu.sn",
-        "LG3-MCIB": "lg3-cimb2025-2026@ism.edu.sn",
-        "LG3D-MI": "lg3d-mi2025-2026@ism.edu.sn",
-        "LG3E-MI": "lg3e-mi2025-2026@ism.edu.sn",
-        "LG3G-CF": "lg3g-cf2025-2026@ism.edu.sn",
-        "LG3H-CF": "lg3h-cf2025-2026@ism.edu.sn",
-        "LG3I-CF": "lg3i-cf2025-2026@ism.edu.sn",
-        "LG3K-CF": "lg3k-cf2025-2026@ism.edu.sn",
-        "LG3L-CF": "lg3l-cf2025-2026@ism.edu.sn",
-        "LG3-MARKETINGETCOMMUNICATION": "lg3-marketing-communication2025-2026@ism.edu.sn",
-        "LG3-MIFULLENGLISH": "lg3-mi-full-english2025-2026@ism.edu.sn",
-        "LG3-ORGA-GRH": "lg3-orga-grh2025-2026@ism.edu.sn",
-        "LG3-ORGA-GRHB": "lg3b-orga-grh2025-2026@ism.edu.sn",
-    },
-    "GRADUATE": {
-        "EMBA": "emba-2526@ism.edu.sn",
-        "MASTER1-BUSINESSADMINISTRATION": "mba1business.administration-2526@ism.edu.sn",
-        "MASTER1-BUSINESSADMINISTRATIONSOIR": "mba1business.administrationsoir-2526@ism.edu.sn",
-        "LG3-ADMINISTRATIONDESAFFAIRESSOIR": "lg3-adm-affairessoir-2526@ism.edu.sn",
-        "MASTER1-QHSE": "mba1qhse-2526@ism.edu.sn",
-        "MASTER1-ACG": "mba1acg-2526@ism.edu.sn",
-        "MASTER1-BANQUE-ASSURANCE": "mba1banque.assurance-2526@ism.edu.sn",
-        "MASTER1-CCE": "mba1cce-2526@ism.edu.sn",
-        "MASTER1-FINANCEDIGITALE(FINTECH)": "mba1finance-digitale-2526@ism.edu.sn",
-        "MASTER1-FINANCEDEMARCHEETTRADING": "mba1finance-de-marche-2526@ism.edu.sn",
-        "MASTER1-GCL": "mba1gcl-2526@ism.edu.sn",
-        "MASTER1-IF": "mba1if-2526@ism.edu.sn",
-        "MASTER1-INTERNATIONALMANAGEMENT": "mba1international.management-2526@ism.edu.sn",
-        "MASTER1-MAA": "mba1maa-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENTAGROBUSINESS": "mba1management.agrobusiness-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENTAGROBUSINESSSOIR": "mba1management.agrobusinesssoir-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENT,VENTEETRELATIONCLIENT": "mba1mvente.rc-2526@ism.edu.sn",
-        "MASTER1-MRH": "mba1mrh-2526@ism.edu.sn",
-        "MASTER1-MARCHEFINANCIERETTRADING": "mba1mft-2526@ism.edu.sn",
-        "MASTER1-RSEETDEVELOPPEMENTDURABLE": "mba1rse.dd-2526@ism.edu.sn",
-        "MASTER1-QHSESOIR": "mba1qhsesoir-2526@ism.edu.sn",
-        "MASTER1-ACGSOIR": "mba1acgsoir-2526@ism.edu.sn",
-        "MASTER1-BANQUE-ASSURANCESOIR": "mba1banque.assurancesoir-2526@ism.edu.sn",
-        "MASTER1-CCESOIR": "mba1ccesoir-2526@ism.edu.sn",
-        "MASTER1-GCLSOIR": "mba1gclsoir-2526@ism.edu.sn",
-        "MASTER1-IFSOIR": "mba1ifsoir-2526@ism.edu.sn",
-        "MASTER1-MAASOIR": "mba1maasoir-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENT,VENTEETRELATIONCLIENTSOIR": "mba1mvente.rcsoir-2526@ism.edu.sn",
-        "MASTER1-MRHSOIR": "mba1mrhsoir-2526@ism.edu.sn",
-        "BP3-PRO": "bp3-2526@ism.edu.sn",
-        "MASTER1-MANAGEMENTDESENERGIESPÉTROLIÈRESETGAZIÈRES": "mba1management.pet.gaz-2526@ism.edu.sn",
-        "MASTER2-QHSE": "mba2qhse-2526@ism.edu.sn",
-        "MASTER2-ACG": "mba2acg-2526@ism.edu.sn",
-        "MASTER2-ACGSOIR": "mba2acgsoir-2526@ism.edu.sn",
-        "MASTER2-BANQUE-ASSURANCE": "mba2banque.assurance-2526@ism.edu.sn",
-        "MASTER2-BANQUE-ASSURANCESOIR": "mba2banque.assurancesoir-2526@ism.edu.sn",
-        "MASTER2-CCE": "mba2cce-2526@ism.edu.sn",
-        "MASTER2-CCESOIR": "mba2ccesoir-2526@ism.edu.sn", 
-        "MASTER2-GCLSOIR": "mba2gclsoir-2526@ism.edu.sn",
-        "MASTER2-GCL": "mba2gcl-2526@ism.edu.sn",
-        "MASTER2-IF": "mba2if-2526@ism.edu.sn",
-        "MASTER2-INTERNATIONALMANAGEMENT": "mba2international.management-2526@ism.edu.sn",
-        "MASTER2-MAA": "mba2maa-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENTAGROBUSINESS": "mba2management.agrobusiness-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENT,VENTEETRELATIONCLIENT": "mba2mvente.rc-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENT,VENTEETRELATIONCLIENTSOIR": "mba2mvente.rc-2526@ism.edu.sn",
-        "MASTER2-MRH": "mba2mrh-2526@ism.edu.sn",
-        "MASTER2-BUSINESSADMINISTRATION": "mba2business.administration-2526@ism.edu.sn",
-        "MASTER2-BUSINESSADMINISTRATIONSOIR": "mba2business.administrationsoir-2526@ism.edu.sn",
-        "MASTER2-QHSESOIR": "mba2qhsesoir-2526@ism.edu.sn",
-        "MBA2-ACGSoir": "mba2acgsoir-2526@ism.edu.sn",
-        "MASTER2-IFSOIR": "mba2ifsoir-2526@ism.edu.sn",
-        "MASTER2-MRHSOIR": "mba2mrhsoir-2526@ism.edu.sn",
-        "MASTER2-FINANCEDIGITALE(FINTECH)": "mba2finance-digitale-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENTDESENERGIESPÉTROLIÈRESETGAZIÈRES": "mba2management.pet.gaz-2526@ism.edu.sn",
-    },
-    "MADIBA": {
-        "JMI1": "jmi1-2526@ism.edu.sn",
-        "LCM-1": "lcm1-2526@ism.edu.sn",
-        "LCMFULLENGLISH-1": "lcm1bilingue-2526@ism.edu.sn",
-        "SPRI1-A": "spri1a-2526@ism.edu.sn",
-        "SPRI1-BILINGUE": "spri1bilingue-2526@ism.edu.sn",
-        "SPRI1-B": "spri1b-2526@ism.edu.sn",
-        "MLI-R2": "mlir2-2526@ism.edu.sn",
-        "JMI-2": "jmi2-2526@ism.edu.sn",
-        "LCM-2": "lcm2-2526@ism.edu.sn",
-        "SPRI2-A": "spri2a-2526@ism.edu.sn",
-        "SPRI2-B": "spri2b-2526@ism.edu.sn",
-        "JMI-3": "jmi3-2526@ism.edu.sn",
-        "LCM-3": "lcm3-2526@ism.edu.sn",
-        "SPRI3-A": "spri3a-2526@ism.edu.sn",
-        "SPRI3-B": "spri3b-2526@ism.edu.sn",
-        "SPRI3-C": "spri3c-2526@ism.edu.sn",
-        "MASTER1SCIENCEPOLITIQUEETRELATIONSINTERNATIONALES": "mba1spri-2526@ism.edu.sn",
-        "M1-SPRISOIR": "mba1sprisoir-2526@ism.edu.sn",
-        "MBA1-DIPLOMATIEETGÉOSTRATÉGIE": "mba1dg-2526@ism.edu.sn",
-        "MBA1-DIPLOMATIEETGÉOSTRATÉGIESOIR": "mba1dgsoir-2526@ism.edu.sn",
-        "MBA1-Gestiondeprojetsculturels": "mba1gpc-2526@ism.edu.sn",
-        "MBA1-CLRP": "mba1clrp-2526@ism.edu.sn",
-        "MBA1-CLRPSOIR": "mba1clrpsoir-2526@ism.edu.sn",
-        "MBA1-DGT": "mba1dgt-2526@ism.edu.sn",
-        "MBA1-EnvironnementetDéveloppementDurable": "mba1edd-2526@ism.edu.sn",
-        "MBA1-SPRIPAIXETSÉCURITÉ": "mba1sps-2526@ism.edu.sn",
-        "MASTER2SCIENCEPOLITIQUEETRELATIONSINTERNATIONALES": "mba2spri-2526@ism.edu.sn",
-        "MBA2-DGT": "mba2dgt-2526@ism.edu.sn",
-        "MBA2-CLRP": "mba2clrp-2526@ism.edu.sn",
-        "MBA2-CLRPSOIR": "mba2clrp-2526@ism.edu.sn",
-        "MBA2DIPLOMATIEETGÉOSTRATÉGIE": "mba2dg-2526@ism.edu.sn",
-        "MBA2-SPRIPAIXETSECURITE": "mba2sps-2526@ism.edu.sn",
-        "MBA2-GOUVERNANCEETMANAGEMENTPUBLIC": "mba2gouvernance.management.public-2526@ism.edu.sn",
-    },
-    "INGENIEUR": {
-        "L1INGENIEURS-R2A": "l1r2.ingenieura@ism.edu.sn",
-        "L1INGENIEURS-R2B": "l1r2.ingenieurb@ism.edu.sn",
-        "L1-CPD": "l1cpd-2526@ism.edu.sn",
-        "L1A-IA(IAGE&TTL)": "l1aia-2526@ism.edu.sn",
-        "L1B-IA(IAGE&TTL)": "l1bia-2526@ism.edu.sn",
-        "L1C-IA(GLRS&ETSE)": "l1cia-2526@ism.edu.sn",
-        "L1-CDSD": "l1cdsd-2526@ism.edu.sn",
-        "L1-CYBERSÉCURITÉ": "l1ia-cyber-2526@ism.edu.sn",
-        "L1D-IA(MAIE&MOSIEF)": "l1dia-2526@ism.edu.sn",
-        "L1E-IA(GLRS&ETSE)": "l1eia-2526@ism.edu.sn",
-        "L1F-IA(IAGE&TTLC)": "l1fia-2526@ism.edu.sn",
-        "L1G-IA(IAGE&TTL)": "l1gia-2526@ism.edu.sn",
-        "L1H-IA(IAGE&TTL)": "l1hia-2526@ism.edu.sn",
-        "L1-INTELLIGENCEARTIFICIELLE": "l1ia-cyber-2526@ism.edu.sn",
-        "L2-INTELLIGENCEARTIFICIELLE": "licence2ia2025-2026@ism.edu.sn",
-        "L2-CYBERSÉCURITÉ": "licence2cyber2025-2026@ism.edu.sn",
-        "L2-CDSD": "licence2cdsd2025-2026@ism.edu.sn",
-        "L2-CPD": "licence2cpd2025-2026@ism.edu.sn",
-        "L2-ETSE": "licence2etse2025-2026@ism.edu.sn",
-        "L2-GLRSB": "licence2glrsb2025-2026@ism.edu.sn",
-        "L2-GLRSA": "licence2glrsa2025-2026@ism.edu.sn",
-        "L2-IAGEA": "licence2iagea2025-2026@ism.edu.sn",
-        "L2-IAGEB": "licence2iageb2025-2026@ism.edu.sn",
-        "L2-MAIE": "licence2maie2025-2026@ism.edu.sn",
-        "L2-MOSIEF": "licence2mosief2025-2026@ism.edu.sn",
-        "L2-TTLB": "licence2ttlb2025-2026@ism.edu.sn",
-        "L2-TTLA": "licence2ttla2025-2026@ism.edu.sn",
-        "L3-CDSD": "licence3cdsd2025-2026@ism.edu.sn",
-        "L3-CPD": "licence3cpd2025-2026@ism.edu.sn",
-        "L3-ETSE": "licence3etse2025-2026@ism.edu.sn",
-        "L3-GLRSA": "licence3glrs2025-2026@ism.edu.sn",
-        "L3-GLRSB": "licence3glrs2025-2026@ism.edu.sn",
-        "L3-IAGEA": "licence3iage2025-2026@ism.edu.sn",
-        "L3-IAGEB": "licence3iage2025-2026@ism.edu.sn",
-        "L3-MAIE": "licence3maie2025-2026@ism.edu.sn",
-        "L3-MOSIEF": "licence3mosief2025-2026@ism.edu.sn",
-        "L3-TTLA": "licence3ttl2025-2026@ism.edu.sn",
-        "L3-TTLB": "licence3ttl2025-2026@ism.edu.sn",
-        "M1IDC-BIGDATA&DATASTRATÉGIE": "mba1bigdata-2526@ism.edu.sn",
-        "M1IDC-MARKETINGDIGITAL&BRANDCONTENT": "mba1marketingdigital-2526@ism.edu.sn",
-        "M1IDC-UXDESIGN": "mba1ux-2526@ism.edu.sn",
-        "M1IRSD": "mba1info-2526@ism.edu.sn",
-        "M1PROJETS": "mba1projet-2526@ism.edu.sn",
-        "M1PROJETSSOIR": "mba1projetsoir-2526@ism.edu.sn",
-        "M1-MSSI": "mba1info-2526@ism.edu.sn",
-        "MBA1-FINTECH": "mba1fintech-2526@ism.edu.sn",
-        "MBA1-DATA-INTELLIGENCEARTIFICIELLE": "mba1ia-2526@ism.edu.sn",
-        "MBA1-ActuariatBigDataetAssuranceQuantitative": "mba1actuariat-2526@ism.edu.sn",
-        "MBA1-CDSD": "mba1cdsd-2526@ism.edu.sn",
-        "MBA2-DATA-INTELLIGENCEARTIFICIELLE": "mba2data_ia-2526@ism.edu.sn",
-        "M2BIGDATA&DATASTRATÉGIE": "mba2bigdata-2526@ism.edu.sn",
-        "M2MARKETINGDIGITAL&BRANDCONTENT": "mba2marketingdigital-2526@ism.edu.sn",
-        "M2MSSI": "mba2mssi-2526@ism.edu.sn",
-        "M2UXDESIGN": "mba2uxdesign-2526@ism.edu.sn",
-        "MASTER2-MANAGEMENTDEPROJETS": "mba2projetga-2526@ism.edu.sn",
-        "MBA2IRSD": "mba2irsd-2526@ism.edu.sn",
-        "MBA2-ACTUARIATBIGDATAETASSURANCEQUANTITATIVE": "mba2actuariat-2526@ism.edu.sn",
-        "MBA2-CDSD": "mba2cdsd-2526@ism.edu.sn",
-        "MBA2-MANAGEMENTDEPROJETSINTERNATIONAUX": "mba2projetinternationaux-2526@ism.edu.sn",
-    }
-}
-
-# -----------------------
-# Helpers
-# -----------------------
-def read_emails_txt(path: Path):
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8") as f:
-        return [line.strip() for line in f if line.strip()]
-
-def read_cours_mapping(cours_dir: Path):
-    mapping = {}
-    if not cours_dir.exists():
-        return mapping
-    for txt_file in sorted(cours_dir.glob("*.txt")):
-        classe_name = txt_file.stem.upper()
-        with txt_file.open("r", encoding="utf-8") as f:
-            codes = [line.strip() for line in f if line.strip()]
-        mapping[classe_name] = codes
-    return mapping
-
-def read_mapping_csv(mapping_csv: Path):
-    if not mapping_csv.exists():
-        return {}
-    dfm = pd.read_csv(mapping_csv, dtype=str).fillna("")
-    cols = [c.strip() for c in dfm.columns]
-    c1 = cols[0]
-    c2 = cols[1] if len(cols) > 1 else cols[0]
-    return dict(zip(dfm[c1].astype(str).str.upper().str.replace(r"\s+","",regex=True), dfm[c2].astype(str).str.strip()))
-
-def remove_accents_and_cleanup(s: str):
-    if not isinstance(s, str): return s
-    accent_map = str.maketrans({
-        "à": "a", "â": "a", "ä": "a", "á": "a", "ã": "a", "ȧ": "a",
-        "é": "e", "è": "e", "ê": "e", "ë": "e",
-        "ì": "i", "î": "i", "ï": "i", "í": "i",
-        "ò": "o", "ô": "o", "ö": "o", "ó": "o", "õ": "o", "ȯ": "o",
-        "ù": "u", "û": "u", "ü": "u", "ú": "u",
-        "ÿ": "y", "ý": "y"
-    })
-    return s.translate(accent_map)
-
-def normalize_and_clean_df(df: pd.DataFrame):
-    df.columns = [col.strip().capitalize() for col in df.columns]
-    required_cols = {"Classe", "E-mail", "Nom", "Prénom"}
-    if not required_cols.issubset(df.columns):
-        missing = required_cols - set(df.columns)
-        raise ValueError(f"Colonnes manquantes : {missing} (attendues: Classe, E-mail, Nom, Prénom)")
-    df = df[["Classe", "E-mail", "Nom", "Prénom"]].copy()
-    df.columns = ["Classroom Name", "Member Email", "Nom", "Prénom"]
-
-    df["Classroom Name"] = df["Classroom Name"].fillna("").astype(str).str.replace(r"\s+","",regex=True).str.upper()
-    df["Member Email"] = df["Member Email"].fillna("").astype(str).str.strip().str.replace(r"\s+","",regex=True)
-    df["Nom"] = df["Nom"].fillna("").astype(str).str.strip().str.replace(r"\s+"," ",regex=True).apply(remove_accents_and_cleanup)
-    df["Prénom"] = df["Prénom"].fillna("").astype(str).str.strip().str.replace(r"\s+"," ",regex=True).apply(remove_accents_and_cleanup)
-
-    return df
-
-def process_dataframe(df: pd.DataFrame, classroom_email_mapping: dict):
-    df = normalize_and_clean_df(df)
-    valid_emails_df = df[df["Member Email"].str.endswith("@ism.edu.sn", na=False)].copy()
-    invalid_emails_df = df[~df["Member Email"].str.endswith("@ism.edu.sn", na=False)].copy()
-
-    valid_emails_df["Group Email [Required]"] = valid_emails_df["Classroom Name"].map(classroom_email_mapping)
-    mapped_df = valid_emails_df.dropna(subset=["Group Email [Required]"]).copy()
-    unmapped_df = valid_emails_df[valid_emails_df["Group Email [Required]"].isna()].copy()
-
-    mapped_export_df = mapped_df[["Group Email [Required]", "Member Email"]].copy()
-    mapped_export_df["Member Type"] = "USER"
-    mapped_export_df["Member Role"] = "MEMBER"
-
-    # --- PROFILE EXPORT LOGIC ---
-    profile_df = valid_emails_df.copy()
-    profile_df["Nom d'utilisateur"] = profile_df["Member Email"]
-    profile_df["Adresse e-mail"] = profile_df["Member Email"]
+# --- FONCTION DE NETTOYAGE (L'ARME SECRÈTE) ---
+def clean_bb_csv(df):
+    """Force le format Blackboard en nettoyant les guillemets après génération."""
+    output = io.StringIO()
+    # Génération standard sans guillemets automatiques (quoting=0)
+    df.to_csv(output, index=False, header=False, sep=',', quoting=0)
+    lines = output.getvalue().split('\n')
     
-    # NEW: Manual single quoting
-    profile_df["Nom"] = '"' + profile_df["Nom"] + '"'
-    profile_df["Prénom"] = '"' + profile_df["Prénom"] + '"'
+    cleaned_lines = []
+    for line in lines:
+        if not line.strip(): continue
+        parts = line.split(',')
+        # On entoure uniquement les 3 premières colonnes (ID, Prénom, Nom)
+        # Le reste (Email, Password brut) reste tel quel
+        p1, p2, p3 = f'"{parts[0]}"', f'"{parts[1]}"', f'"{parts[2]}"'
+        rest = ",".join(parts[3:])
+        cleaned_lines.append(f"{p1},{p2},{p3},{rest}")
     
-    profile_df["Nouveau mot de passe"] = "ismapps2025,,,,,,,,,,,,,,,,,1382"
-    profile_export_df = profile_df[["Nom d'utilisateur", "Nom", "Prénom", "Adresse e-mail", "Nouveau mot de passe"]]
+    return "\n".join(cleaned_lines)
 
-    return {
-        "mapped_export_df": mapped_export_df,
-        "mapped_df": mapped_df,
-        "unmapped_df": unmapped_df,
-        "invalid_emails_df": invalid_emails_df,
-        "profile_export_df": profile_export_df
-    }
+# --- INTERFACE PRINCIPALE ---
+st.title("🛡️ Minatholy V2.0")
+st.caption("Système de gestion des fichiers Blackboard - ISM Dakar")
 
-# NEW: Cleanup function to handle the search-and-replace for Blackboard
-def cleanup_blackboard_formatting(raw_bytes):
-    text = raw_bytes.getvalue().decode("utf-8-sig")
-    # Replace triple quotes with single quotes
-    text = text.replace('"""', '"')
-    # Remove quotes from the specific password pattern
-    text = text.replace('"ismapps2025,,,,,,,,,,,,,,,,,1382"', 'ismapps2025,,,,,,,,,,,,,,,,,1382')
-    return BytesIO(text.encode("utf-8-sig"))
+tab_proc, tab_map, tab_hist = st.tabs([
+    "📤 Traitement des fichiers", 
+    "🔍 Mappings & Doublons", 
+    "📊 Statistiques d'utilisation"
+])
 
-def make_bytes(obj):
-    b = BytesIO()
-    if isinstance(obj, pd.DataFrame):
-        obj.to_csv(b, index=False, header=True, encoding="utf-8-sig")
-    else:
-        b.write(str(obj).encode("utf-8"))
-    b.seek(0)
-    return b
-
-# -----------------------
-# UI (header / sidebar)
-# -----------------------
-header_col1, header_col2 = st.columns([1, 4])
-with header_col1:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/e/e4/Apollo_of_the_Belvedere.jpg", width=64)
-with header_col2:
-    st.title("Minatholy")
-    st.markdown("Génère les exports (listes de diffusion, créations et inscriptions de profils sur BLU) à partir d'un export de liste d'éléves.")
-
-st.markdown("---")
-
-with st.sidebar:
-    st.header("Paramètres")
-    selected_school = st.selectbox("Choisir l'école", SCHOOLS)
-    zip_opt = st.checkbox("Générer un ZIP contenant tous les fichiers", value=True)
-
-# -----------------------
-# Uploads & options
-# -----------------------
-st.subheader(f" Upload du fichier Excel pour : **{selected_school}**")
-uploaded_excel = st.file_uploader("Importer le fichier Excel (.xls/.xlsx)", type=["xls", "xlsx"])
-run = st.button("🚀 Lancer le traitement", type="primary")
-
-# -----------------------
-# Processing
-# -----------------------
-if run:
-    if not uploaded_excel:
-        st.error("Veuillez uploader un fichier Excel.")
-        st.stop()
-
-    school_dir = DATA_DIR / selected_school
-    emails_path = school_dir / "emails.txt"
-    cours_dir = school_dir / "CoursParClasse"
-    mapping_csv_path = school_dir / "mapping.csv"
-
-    mapping = {}
-    if mapping_csv_path.exists():
-        mapping = read_mapping_csv(mapping_csv_path)
-    else:
-        mapping = {k.upper().replace(" ", ""): v for k, v in SCHOOL_MAPPINGS[selected_school].items()}
-
-    admins = read_emails_txt(emails_path)
-    classroom_course_mapping = read_cours_mapping(cours_dir)
-
-    try:
-        df = pd.read_excel(uploaded_excel, dtype=str)
-        results = process_dataframe(df, mapping)
-    except Exception as e:
-        st.error(f"Erreur : {e}")
-        st.stop()
-
-    mapped_export_df = results["mapped_export_df"]
-    mapped_df = results["mapped_df"]
-    unmapped_df = results["unmapped_df"]
-    invalid_emails_df = results["invalid_emails_df"]
-    profile_export_df = results["profile_export_df"]
-
-    admin_rows = []
-    for group_email in set(mapping.values()):
-        for admin_email in admins:
-            admin_rows.append({"Group Email [Required]": group_email, "Member Email": admin_email, "Member Type": "USER", "Member Role": "MANAGER"})
-    admin_df = pd.DataFrame(admin_rows)
-
-    combined = pd.concat([mapped_export_df, admin_df], ignore_index=True) if not mapped_export_df.empty else admin_df
-
-    course_rows = []
-    for classe, group in mapped_df.groupby("Classroom Name"):
-        emails = group["Member Email"].dropna().str.strip().unique()
-        codes = classroom_course_mapping.get(classe, [])
-        for email in emails:
-            for code in codes:
-                course_rows.append([code, email, "", ""])
-    course_df = pd.DataFrame(course_rows)
-
-    now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+# --- ONGLET 1 : TRAITEMENT ---
+with tab_proc:
+    col_l, col_r = st.columns([1, 2])
     
-    # Generate Files
-    fn_mise = f"mise_a_jour_liste_de_diffusion_GW_{selected_school}_{now_str}.csv"
-    fn_admin = f"ajouter_membres_admin_GW_{selected_school}_{now_str}.csv"
-    fn_profils = f"creation_profils_BLU_{selected_school}_{now_str}.csv"
-    fn_courses = f"inscription_au_cours_en_ligne_BLU_{selected_school}_{now_str}.csv"
-    fn_report = f"rapport_du_script_{selected_school}_{now_str}.txt"
-
-    bytes_mise = make_bytes(combined)
-    bytes_admin = make_bytes(admin_df)
+    with col_l:
+        st.subheader("Configuration")
+        school_choice = st.selectbox("Sélectionner l'école", list(SCHOOL_MAPPING.keys()))
+        uploaded_file = st.file_uploader("Charger le fichier Excel étudiant", type=['xlsx'])
     
-    # CLEANUP FOR PROFILES
-    bytes_profils_raw = make_bytes(profile_export_df)
-    bytes_profils = cleanup_blackboard_formatting(bytes_profils_raw)
+    if uploaded_file and school_choice:
+        with st.status("Traitement des données en cours...", expanded=True) as status:
+            df = pd.read_excel(uploaded_file)
+            mapping = SCHOOL_MAPPING[school_choice]
+            zip_buffer = io.BytesIO()
+            
+            success_count = 0
+            missing_classes = []
 
-    # CLEANUP FOR COURSES (Ensure no quotes around password/codes)
-    b_courses_raw = BytesIO()
-    course_df.to_csv(b_courses_raw, index=False, header=False, encoding="utf-8-sig")
-    b_courses = cleanup_blackboard_formatting(b_courses_raw)
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zip_file:
+                classes = df['Classe'].unique()
+                
+                for cls in classes:
+                    if cls in mapping:
+                        st.write(f"✅ Traitement : **{cls}**")
+                        sub_df = df[df['Classe'] == cls].copy()
+                        
+                        # Structure Blackboard
+                        bb_df = pd.DataFrame({
+                            'ID': sub_df['Identifiant de l’utilisateur'],
+                            'First': sub_df['Prénom'],
+                            'Last': sub_df['Nom'],
+                            'Email': mapping[cls],
+                            'Pass': BB_PASSWORD
+                        })
+                        
+                        # Application du fix de formatage
+                        csv_data = clean_bb_csv(bb_df)
+                        zip_file.writestr(f"{cls}.csv", csv_data)
+                        success_count += 1
+                    else:
+                        missing_classes.append(cls)
+            
+            if missing_classes:
+                st.warning(f"⚠️ {len(missing_classes)} classes non trouvées dans le mapping : {', '.join(missing_classes)}")
+            
+            status.update(label="Fichiers prêts !", state="complete")
+            
+            st.download_button(
+                label=f"📥 Télécharger le ZIP ({success_count} fichiers)",
+                data=zip_buffer.getvalue(),
+                file_name=f"Blackboard_{school_choice}_{datetime.now().strftime('%d%m_%Hh%M')}.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
+            
+            # Sauvegarde Log
+            log_data = pd.DataFrame([{"Date": datetime.now().strftime("%Y-%m-%d %H:%M"), "Ecole": school_choice, "Classes": success_count, "Etudiants": len(df)}])
+            log_data.to_csv("history.csv", mode='a', header=not os.path.exists("history.csv"), index=False)
 
-    b_report = BytesIO(f"Report — {selected_school} — {now_str}".encode("utf-8"))
+# --- ONGLET 2 : MAPPINGS & DOUBLONS ---
+with tab_map:
+    st.subheader("Explorateur de Mappings")
+    
+    # Préparation des données pour l'affichage
+    flat_map = []
+    for sch, classes in SCHOOL_MAPPING.items():
+        for c, e in classes.items():
+            flat_map.append({"Ecole": sch, "Classe": c, "Email": e})
+    map_df = pd.DataFrame(flat_map)
 
-    # UI Downloads
-    st.success("✅ Traitement terminé")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.download_button("Télécharger → mise_a_jour", bytes_mise, file_name=fn_mise, mime="text/csv")
-        st.download_button("Télécharger → ajouter_admin", bytes_admin, file_name=fn_admin, mime="text/csv")
-        st.download_button("Télécharger → creation_profils", bytes_profils, file_name=fn_mise, mime="text/csv")
-    with c2:
-        st.download_button("Télécharger → inscription_cours", b_courses, file_name=fn_courses, mime="text/csv")
-        st.download_button("Télécharger → rapport", b_report, file_name=fn_report, mime="text/plain")
+    # Recherche
+    search = st.text_input("Rechercher une classe ou un email...").strip().upper()
+    filtered_df = map_df[map_df.apply(lambda row: search in row.values.astype(str).flat, axis=1)] if search else map_df
+    
+    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
 
-    if zip_opt:
-        zip_buffer = BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr(fn_mise, bytes_mise.getvalue())
-            zf.writestr(fn_admin, bytes_admin.getvalue())
-            zf.writestr(fn_profils, bytes_profils.getvalue())
-            zf.writestr(fn_courses, b_courses.getvalue())
-        st.download_button("📦 Télécharger ZIP", zip_buffer.getvalue(), file_name=f"export_{selected_school}.zip", mime="application/zip")
+    # --- NOUVEAU : VÉRIFICATEUR DE DOUBLONS ---
+    st.divider()
+    if st.button("🔍 Vérifier les doublons d'emails"):
+        duplicates = map_df[map_df.duplicated('Email', keep=False)]
+        if not duplicates.empty:
+            st.error("🚨 Alerte : Les emails suivants sont assignés à plusieurs classes !")
+            st.dataframe(duplicates.sort_values('Email'), use_container_width=True)
+        else:
+            st.success("✨ Parfait ! Aucun doublon détecté dans tes mappings.")
+
+# --- ONGLET 3 : HISTORIQUE ---
+with tab_hist:
+    if os.path.exists("history.csv"):
+        hist = pd.read_csv("history.csv")
+        
+        c1, c2, c3
