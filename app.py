@@ -1,147 +1,135 @@
 import streamlit as st
 import pandas as pd
-import io
-import zipfile
 from datetime import datetime
-import os
+from io import BytesIO
+import zipfile
 
-# --- 1. CONFIGURATION & SÉCURITÉ ---
-st.set_page_config(page_title="Minatholy V3.0", layout="wide", page_icon="🛡️")
+# -----------------------
+# 1. CONFIGURATION
+# -----------------------
+st.set_page_config(page_title="Minatholy V3.2", layout="wide", page_icon="🛡️")
 
-try:
-    # On récupère tout depuis secrets.toml
-    SCHOOL_MAPPING = st.secrets["mappings"]
-    BB_PASSWORD = st.secrets["general"]["password"]
-except Exception as e:
-    st.error("❌ Erreur : Le fichier secrets.toml est mal configuré.")
-    st.stop()
+# Intégration de ton dictionnaire de mapping (extrait pour l'exemple)
+# Remets ici TOUT ton bloc SCHOOL_MAPPINGS de l'ancien code
+SCHOOL_MAPPINGS = {
+    "INGENIEUR": {
+        "L1-CPD": "l1cpd-2526@ism.edu.sn",
+        "L1INGENIEURS-R2A": "l1r2.ingenieura@ism.edu.sn",
+        # ... remets tout ici
+    },
+    "MANAGEMENT": { "LG1-ADMINISTRATIONDESAFFAIRES": "lg1-adm-affaires2025-2026@ism.edu.sn" },
+    "DROIT": {}, "GRADUATE": {}, "MADIBA": {}
+}
 
-# --- 2. LES FONCTIONS MÉTIER (TON ANCIEN LOGIQUE) ---
-
-def clean_bb_csv(df):
-    """Le correctif pour Blackboard : force les guillemets là où il faut."""
-    output = io.StringIO()
-    df.to_csv(output, index=False, header=False, sep=',', quoting=0)
-    lines = output.getvalue().split('\n')
-    cleaned = []
-    for line in lines:
-        if not line.strip(): continue
-        parts = line.split(',')
-        # Format: "ID","Prénom","Nom",Email,Password
-        cleaned.append(f'"{parts[0]}","{parts[1]}","{parts[2]}",{parts[3]},{parts[4]}')
-    return "\n".join(cleaned)
-
-def mise_a_jour_mailing_lists(df, school_mapping):
-    """Simule/Prépare la mise à jour des listes Google."""
-    # Ici, ta logique de préparation des listes
-    classes_touchees = df['Classe'].unique()
-    return f"Mise à jour préparée pour {len(classes_touchees)} listes de l'école."
-
-def inscription_cours_en_ligne(df):
-    """Génère la logique d'inscription aux cours (Enrollment)."""
-    # Ta logique habituelle d'inscription
-    return "Mapping des cours effectué avec succès."
-
-# --- 3. INTERFACE UTILISATEUR ---
-st.title("🛡️ Minatholy V3.0")
-st.caption("Gestion centralisée : Mailing Lists, Blackboard & Inscriptions")
-
-tab1, tab2, tab3 = st.tabs(["🚀 Exécution", "📊 Rapport & Dashboard", "🔍 Mappings"])
-
-with tab1:
-    col1, col2 = st.columns([1, 2])
+# -----------------------
+# 2. FONCTIONS DE NETTOYAGE (FIX "CLASSE")
+# -----------------------
+def clean_columns(df):
+    """Supprime les espaces invisibles et normalise les noms de colonnes."""
+    # Nettoyage des noms de colonnes (ex: " Classe " -> "Classe")
+    df.columns = [str(c).strip() for c in df.columns]
     
-    with col1:
-        st.subheader("Paramètres")
-        school_choice = st.selectbox("Choisir l'école", list(SCHOOL_MAPPING.keys()))
-        uploaded_file = st.file_uploader("Fichier Excel (XLSX ou XLS)", type=['xlsx', 'xls'])
+    # Mapping intelligent (cherche 'classe' ou 'email' même avec fautes/espaces)
+    for col in df.columns:
+        c_low = col.lower()
+        if 'classe' in c_low: df = df.rename(columns={col: 'Classe'})
+        if 'identifiant' in c_low or 'email' in c_low or 'e-mail' in c_low: 
+            df = df.rename(columns={col: 'Member Email'})
+        if 'nom' == c_low: df = df.rename(columns={col: 'Nom'})
+        if 'prénom' in c_low or 'prenom' in c_low: df = df.rename(columns={col: 'Prénom'})
+    return df
+
+def remove_accents(s):
+    if not isinstance(s, str): return s
+    accents = {'à':'a','â':'a','ä':'a','é':'e','è':'e','ê':'e','ë':'e','î':'i','ï':'i','ô':'o','ö':'o','û':'u','ü':'u'}
+    for a, b in accents.items(): s = s.replace(a, b)
+    return s
+
+# -----------------------
+# 3. INTERFACE UTILISATEUR
+# -----------------------
+st.title("🛡️ Minatholy V3.2")
+st.subheader("Dashboard de Gestion des Effectifs")
+
+with st.sidebar:
+    st.header("⚙️ Paramètres")
+    selected_school = st.selectbox("Sélectionner l'école", list(SCHOOL_MAPPINGS.keys()))
+    uploaded_file = st.file_uploader("Upload Excel (.xlsx ou .xls)", type=["xls", "xlsx"])
+    
+    st.divider()
+    st.header("👥 Administration")
+    admin_emails = st.text_area("Emails Admins (Manager)", 
+                                "marie-bernadette.ndione@groupeism.sn\nmar-sarr.ndiaye@groupeism.sn")
+
+if uploaded_file:
+    # Lecture multi-format
+    df_raw = pd.read_excel(uploaded_file)
+    df = clean_columns(df_raw)
+    
+    st.info(f"📁 Fichier détecté : {len(df)} lignes trouvées.")
+
+    if st.button("🚀 LANCER LE TRAITEMENT", type="primary"):
+        # --- LOGIQUE MÉTIER ---
+        mapping = SCHOOL_MAPPINGS.get(selected_school, {})
+        
+        # Nettoyage des données
+        df['Classe_Clean'] = df['Classe'].fillna('').astype(str).str.strip().str.upper().str.replace(' ', '')
+        valid_df = df[df["Member Email"].str.contains("@", na=False)].copy()
+        valid_df["Group Email"] = valid_df["Classe_Clean"].map(mapping)
+        
+        # 1. Mailing Lists (GW)
+        gw_df = valid_df.dropna(subset=["Group Email"])[["Group Email", "Member Email"]].copy()
+        gw_df.columns = ["Group Email [Required]", "Member Email"]
+        gw_df["Member Type"], gw_df["Member Role"] = "USER", "MEMBER"
+        
+        # Ajout des Admins (MANAGER)
+        admins = [a.strip() for a in admin_emails.split('\n') if a.strip()]
+        admin_rows = []
+        for g_mail in gw_df["Group Email [Required]"].unique():
+            for a_mail in admins:
+                admin_rows.append([g_mail, a_mail, "USER", "MANAGER"])
+        full_gw = pd.concat([gw_df, pd.DataFrame(admin_rows, columns=gw_df.columns)])
+
+        # 2. Profils Blackboard (BLU)
+        profils_df = pd.DataFrame({
+            "Nom d'utilisateur": valid_df["Member Email"],
+            "Nom": valid_df["Nom"].fillna('').str.upper().apply(remove_accents),
+            "Prénom": '"' + valid_df["Prénom"].fillna('').apply(remove_accents) + '"',
+            "Adresse e-mail": valid_df["Member Email"],
+            "Mot de passe": "ismapps2025,,,,,,,,,,,,,,,,,1382"
+        })
+
+        # --- DASHBOARD DE RAPPORT (AFFICHAGE DIRECT) ---
+        st.divider()
+        st.header("📊 Rapport d'Exécution")
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Étudiants validés", len(valid_df))
+        m2.metric("Classes traitées", gw_df["Group Email [Required]"].nunique())
+        m3.metric("Admins ajoutés", len(admins))
+
+        # Alertes sur les classes non mappées
+        unmapped = valid_df[valid_df["Group Email"].isna()]["Classe"].unique()
+        if len(unmapped) > 0:
+            with st.expander("⚠️ Classes sans correspondance (Mapping manquant)", expanded=True):
+                st.write(list(unmapped))
+                st.caption("Vérifie si ces noms de classes sont bien dans ton dictionnaire SCHOOL_MAPPINGS.")
+
+        # --- GÉNÉRATION DU ZIP ---
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            zf.writestr(f"1_Mailing_Lists_{selected_school}.csv", full_gw.to_csv(index=False, encoding="utf-8-sig"))
+            zf.writestr(f"2_Profils_Blackboard_{selected_school}.csv", profils_df.to_csv(index=False, encoding="utf-8-sig"))
+            # Tu peux ajouter ici le CSV d'inscription aux cours si besoin
         
         st.divider()
-        st.write("🛠️ **Actions à inclure :**")
-        do_bb = st.checkbox("Création Profils Blackboard", value=True)
-        do_mail = st.checkbox("Mise à jour Mailing Lists", value=True)
-        do_enroll = st.checkbox("Inscription aux cours", value=True)
+        st.download_button(
+            label="📥 Télécharger les fichiers CSV (ZIP)",
+            data=zip_buffer.getvalue(),
+            file_name=f"Minatholy_{selected_school}_{datetime.now().strftime('%Hh%M')}.zip",
+            mime="application/zip",
+            use_container_width=True
+        )
 
-    if uploaded_file and school_choice:
-        # --- LECTURE ET NETTOYAGE (LE FIX) ---
-        df = pd.read_excel(uploaded_file)
-        # Nettoyage des colonnes (Espaces avant/après)
-        df.columns = [str(c).strip() for c in df.columns]
-        
-        # Vérification des colonnes critiques
-        if 'Classe' not in df.columns:
-            st.error("❌ La colonne 'Classe' n'a pas été trouvée.")
-            st.stop()
-        
-        id_col = next((c for c in df.columns if 'Identifiant' in c), None)
-
-        if st.button("LANCER LE TRAITEMENT COMPLET"):
-            with st.status("Exécution des tâches...", expanded=True) as status:
-                mapping = SCHOOL_MAPPING[school_choice]
-                zip_buffer = io.BytesIO()
-                success_count = 0
-                
-                # --- LOGIQUE BLACKBOARD ---
-                if do_bb:
-                    status.write("⏳ Génération des fichiers Blackboard...")
-                    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zip_file:
-                        for cls in df['Classe'].unique():
-                            clean_cls = str(cls).strip()
-                            if clean_cls in mapping:
-                                sub_df = df[df['Classe'] == cls].copy()
-                                bb_df = pd.DataFrame({
-                                    'ID': sub_df[id_col],
-                                    'First': sub_df['Prénom'],
-                                    'Last': sub_df['Nom'],
-                                    'Email': mapping[clean_cls],
-                                    'Pass': BB_PASSWORD
-                                })
-                                zip_file.writestr(f"{clean_cls}.csv", clean_bb_csv(bb_df))
-                                success_count += 1
-                
-                # --- LOGIQUE MAILING LISTS ---
-                if do_mail:
-                    status.write("⏳ Synchro des Mailing Lists...")
-                    mail_status = mise_a_jour_mailing_lists(df, mapping)
-                
-                # --- LOGIQUE INSCRIPTION ---
-                if do_enroll:
-                    status.write("⏳ Inscription aux cours en ligne...")
-                    enroll_status = inscription_cours_en_ligne(df)
-
-                status.update(label="✅ Opérations terminées !", state="complete")
-
-            # --- RÉSULTATS & TÉLÉCHARGEMENT ---
-            st.success(f"Traitement terminé : {success_count} classes générées.")
-            
-            if do_bb:
-                st.download_button(
-                    "📥 Télécharger les fichiers Blackboard (ZIP)",
-                    data=zip_buffer.getvalue(),
-                    file_name=f"BB_{school_choice}_{datetime.now().strftime('%d%m')}.zip",
-                    mime="application/zip"
-                )
-            
-            # Sauvegarde pour le Dashboard
-            log_entry = pd.DataFrame([{"Date": datetime.now(), "Ecole": school_choice, "Etudiants": len(df), "Classes": success_count}])
-            log_entry.to_csv("history.csv", mode='a', header=not os.path.exists("history.csv"), index=False)
-
-with tab2: # LE DASHBOARD
-    st.subheader("📊 Rapport du Script")
-    if os.path.exists("history.csv"):
-        h_df = pd.read_csv("history.csv")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Étudiants", h_df["Etudiants"].sum())
-        c2.metric("Total Fichiers", h_df["Classes"].sum())
-        c3.metric("Dernier Run", h_df["Date"].iloc[-1][:16])
-        
-        st.line_chart(h_df.set_index("Date")["Etudiants"])
-        st.dataframe(h_df.sort_values("Date", ascending=False), use_container_width=True)
-    else:
-        st.info("Aucun historique pour le moment.")
-
-with tab3: # CONSULTATION MAPPINGS
-    st.subheader("🔍 Vérification des Mappings")
-    # Affichage des données de mapping de l'école sélectionnée
-    flat_data = [{"Classe": c, "Email": e} for c, e in SCHOOL_MAPPING[school_choice].items()]
-    st.table(pd.DataFrame(flat_data))
+st.divider()
+st.caption("Minatholy V3.2 | ISM Dakar | Correction automatique des colonnes activée")
