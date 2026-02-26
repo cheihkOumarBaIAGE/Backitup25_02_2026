@@ -353,7 +353,7 @@ with st.sidebar:
 st.title("Urgence IT BASH")
 
 # --- NAVIGATION TABS ---
-main_tab, manual_tab = st.tabs(["BASH", "Mise à jour Urgente de cours"])
+main_tab, manual_tab = st.tabs(["BASH", "MAJ de cours"])
 
 # -----------------------
 # TAB 1: AUTOMATIC TREATMENT
