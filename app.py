@@ -344,16 +344,16 @@ def normalize_and_clean_df(df: pd.DataFrame):
 # -----------------------
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/commons/b/b3/Apollo-kop%2C_objectnr_A_12979.jpg", width=80)
-    st.title("Minatholy Settings")
+    st.title("Urgence IT Settings")
     selected_school = st.selectbox("Sélectionner l'école", SCHOOLS)
     zip_opt = st.checkbox("Générer Archive ZIP (Automatique)", value=True)
     st.divider()
     st.caption("v2.6 - Added Manual Inscription Mode")
 
-st.title("🎓 ISM Data Processing")
+st.title("Urgence IT BASH")
 
 # --- NAVIGATION TABS ---
-main_tab, manual_tab = st.tabs(["🚀 Traitement Automatique (Excel)", "🛠️ Inscription Manuelle"])
+main_tab, manual_tab = st.tabs(["BASH", "Mise à jour Urgente de cours"])
 
 # -----------------------
 # TAB 1: AUTOMATIC TREATMENT
