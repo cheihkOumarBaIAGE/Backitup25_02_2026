@@ -300,8 +300,8 @@ def sanitize_csv_output(df: pd.DataFrame, is_profile=False, header=True):
 
     if is_profile:
         csv_text = csv_text.replace('"""', '"')
-        bad_pw = '"ismapps2025,,,,,,,,,,,,,,,,,1382"'
-        good_pw = 'ismapps2025,,,,,,,,,,,,,,,,,1382'
+        bad_pw = '"ismapps2026,,,,,,,,,,,,,,,,,1382"'
+        good_pw = 'ismapps2026,,,,,,,,,,,,,,,,,1382'
         csv_text = csv_text.replace(bad_pw, good_pw)
 
     final_buffer = BytesIO(csv_text.encode("utf-8-sig"))
@@ -410,7 +410,7 @@ with main_tab:
                     # 3. Profiles
                     profiles = valid_df.copy()
                     profiles["Prénom"] = "\"" + profiles["Prénom"] + "\""
-                    profiles["Nouveau mot de passe"] = "ismapps2025,,,,,,,,,,,,,,,,,1382"
+                    profiles["Nouveau mot de passe"] = "ismapps2026,,,,,,,,,,,,,,,,,1382"
                     profile_export = profiles[["Member Email", "Nom", "Prénom", "Member Email", "Nouveau mot de passe"]]
                     profile_export.columns = ["Nom d'utilisateur", "Nom", "Prénom", "Adresse e-mail", "Nouveau mot de passe"]
 
