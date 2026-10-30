@@ -5,7 +5,6 @@ from datetime import datetime
 from io import BytesIO
 import zipfile
 import csv
-import shutil
 
 # -----------------------
 # Page configuration
@@ -326,16 +325,9 @@ def read_cours_mapping(cours_dir: Path):
     mapping = {}
     if not cours_dir.exists(): return mapping
     for txt_file in sorted(cours_dir.glob("*.txt")):
-        mapping[txt_file.stem.upper()] = [l.strip() for l in txt_file.open("r", encoding="utf-8") if l.strip()]
+        if not txt_file.name.endswith("_ARCHIVED.txt"):
+            mapping[txt_file.stem.upper()] = [l.strip() for l in txt_file.open("r", encoding="utf-8") if l.strip()]
     return mapping
-
-def reset_and_init_cours_dir(cours_dir: Path, class_names: list):
-    """Purge le dossier CoursParClasse et crée un fichier vide par classe Excel."""
-    if cours_dir.exists():
-        shutil.rmtree(cours_dir)
-    cours_dir.mkdir(parents=True, exist_ok=True)
-    for c_name in class_names:
-        (cours_dir / f"{c_name}.txt").touch()
 
 def save_cours_mapping(cours_dir: Path, class_name: str, raw_text: str):
     cours_dir.mkdir(parents=True, exist_ok=True)
@@ -343,6 +335,23 @@ def save_cours_mapping(cours_dir: Path, class_name: str, raw_text: str):
     lines = [line.strip() for line in raw_text.replace(",", "\n").split("\n") if line.strip()]
     with file_path.open("w", encoding="utf-8") as f:
         f.write("\n".join(lines))
+
+def archive_obsolete_class_files(cours_dir: Path, active_classes: set):
+    """
+    Renomme tous les fichiers .txt existants dont la classe ne fait PAS partie 
+    des classes actives dans l'Excel en ajoutant le suffixe _ARCHIVED.txt
+    """
+    if not cours_dir.exists(): return []
+    archived_files = []
+    for txt_file in cours_dir.glob("*.txt"):
+        if txt_file.name.endswith("_ARCHIVED.txt"):
+            continue
+        class_stem = txt_file.stem.upper()
+        if class_stem not in active_classes:
+            new_path = cours_dir / f"{txt_file.stem}_ARCHIVED.txt"
+            txt_file.rename(new_path)
+            archived_files.append(txt_file.name)
+    return archived_files
 
 def normalize_and_clean_df(df: pd.DataFrame):
     df.columns = [col.strip().capitalize() for col in df.columns]
@@ -364,7 +373,7 @@ with st.sidebar:
     selected_school = st.selectbox("Sélectionner l'école", SCHOOLS)
     zip_opt = st.checkbox("Générer Archive ZIP (Automatique)", value=True)
     st.divider()
-    st.caption("v2.9 - Full Reset & Excel Sync Mode")
+    st.caption("v2.9 - Archivage automatique des cours obsolètes")
 
 st.title("Urgence IT BASH")
 
@@ -378,7 +387,7 @@ with main_tab:
     with st.container(border=True):
         col_up1, col_up2 = st.columns([3, 1])
         with col_up1:
-            uploaded_excel = st.file_uploader("Importer le fichier Excel des inscriptions", type=["xls", "xlsx"])
+            uploaded_excel = st.file_uploader("Importer le fichier Excel des inscriptions", type=["xls", "xlsx"], key="main_excel_uploader")
         with col_up2:
             st.write("##")
             run = st.button("🚀 Lancer le traitement", type="primary", use_container_width=True)
@@ -389,8 +398,8 @@ with main_tab:
         else:
             with st.status("Traitement en cours...", expanded=True) as status:
                 school_dir = DATA_DIR / selected_school
+                cours_dir = school_dir / "CoursParClasse"
                 admins = read_emails_txt(school_dir / "emails.txt")
-                cours_mapping = read_cours_mapping(school_dir / "CoursParClasse")
                 
                 mapping_csv = school_dir / "mapping.csv"
                 if mapping_csv.exists():
@@ -402,6 +411,15 @@ with main_tab:
                 try:
                     raw_df = pd.read_excel(uploaded_excel, dtype=str)
                     df = normalize_and_clean_df(raw_df)
+                    
+                    # 🔍 ARCHIVAGE AUTOMATIQUE DES COURS INEXISTANTS DANS L'EXCEL
+                    active_excel_classes = set(df["Classroom Name"].unique())
+                    archived = archive_obsolete_class_files(cours_dir, active_excel_classes)
+                    if archived:
+                        st.warning(f"📦 {len(archived)} fichier(s) de classe obsolète(s) ont été archivé(s) : {', '.join(archived)}")
+
+                    # Relecture du cours mapping mis à jour après l'archivage
+                    cours_mapping = read_cours_mapping(cours_dir)
                     
                     valid_emails_mask = df["Member Email"].str.endswith("@ism.edu.sn", na=False) | df["Member Email"].str.endswith("@groupeism.sn", na=False)
                     invalid_emails_list = df[~valid_emails_mask]["Member Email"].unique().tolist()
@@ -458,6 +476,10 @@ with main_tab:
                     report += f"\nInvalid emails ({len(invalid_emails_list)}):\n"
                     for m in invalid_emails_list: report += f"- {m if m else '(Vide)'}\n"
                     
+                    if archived:
+                        report += f"\nFichiers cours archivés ({len(archived)}):\n"
+                        for a_f in archived: report += f"- {a_f}\n"
+
                     report += f"\nSummary counts:\n"
                     report += f"- Utilisateurs mappés: {len(mapped_df)}\n- Utilisateurs non mappés: {len(unmapped_students_df)}\n- Emails ignorés: {len(df) - len(valid_df)}\n- Classes sans codes: {len(classes_sans_codes)}\n"
 
@@ -501,47 +523,37 @@ with main_tab:
 # TAB 2: COURSE MAPPING MANAGEMENT
 # -----------------------
 with cours_mgr_tab:
-    st.subheader(f"📝 Reconfiguration complète des classes — {selected_school}")
-    st.warning("⚠️ Importer un fichier Excel va SUPPRIMER toutes les anciennes classes/codes de cette école et générer uniquement les classes du fichier.")
+    st.subheader(f"📝 Gestion centralisée des codes cours — {selected_school}")
+    st.info("Chargez un fichier Excel pour n'afficher et mettre à jour QUE les classes réellement présentes.")
+
+    excel_for_classes = st.file_uploader("📥 Importer l'Excel pour filtrer les classes exactes", type=["xls", "xlsx"], key="excel_cours_sync")
 
     cours_dir = DATA_DIR / selected_school / "CoursParClasse"
+    current_cours = read_cours_mapping(cours_dir)
     
-    col_file, col_reset = st.columns([3, 1])
-    with col_file:
-        excel_for_classes = st.file_uploader("📥 Charger l'Excel des inscriptions (Vider & Réinitialiser)", type=["xls", "xlsx"], key="excel_cours_reset")
-    with col_reset:
-        st.write("##")
-        reset_confirm = st.button("🗑️ Vider manuellement tout", use_container_width=True, help="Supprime toutes les classes enregistrées sans importer d'Excel")
-
-    if reset_confirm:
-        reset_and_init_cours_dir(cours_dir, [])
-        st.warning(f"🧹 Toutes les classes et codes pour **{selected_school}** ont été supprimés.")
-        st.rerun()
-
     if excel_for_classes:
         try:
             df_sync = pd.read_excel(excel_for_classes, dtype=str)
             df_cleaned = normalize_and_clean_df(df_sync)
-            excel_classes = sorted(list(df_cleaned["Classroom Name"].dropna().unique()))
-            
-            # Action de Réinitialisation complète
-            reset_and_init_cours_dir(cours_dir, excel_classes)
-            st.success(f"⚡ Ancien dossier purgé ! {len(excel_classes)} nouvelles classes créées à partir du fichier Excel.")
+            known_classes = sorted(list(df_cleaned["Classroom Name"].dropna().unique()))
+            st.success(f"✅ {len(known_classes)} classes actives trouvées dans votre fichier Excel !")
         except Exception as e:
-            st.error(f"Erreur lors de la réinitialisation : {e}")
-
-    current_cours = read_cours_mapping(cours_dir)
-    known_classes = sorted(list(current_cours.keys()))
-
-    if not known_classes:
-        st.info("💡 Aucune classe actuellement enregistrée. Veuillez importer un fichier Excel ci-dessus pour générer automatiquement la liste des classes.")
+            st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
+            known_classes = sorted(list(current_cours.keys()))
     else:
-        search_class = st.text_input("🔍 Filtrer les classes chargées...", placeholder="Ex: L1, LDA, MBA...")
-        if search_class:
-            filtered_classes = [c for c in known_classes if search_class.upper() in c.upper()]
-        else:
-            filtered_classes = known_classes
+        # Si aucun Excel chargé, affiche les classes non-archivées du dossier
+        known_classes = sorted(list(current_cours.keys()))
 
+    # Recherche rapide
+    search_class = st.text_input("🔍 Filtrer les classes...", placeholder="Ex: L1, LDA, MBA...")
+    if search_class:
+        filtered_classes = [c for c in known_classes if search_class.upper() in c.upper()]
+    else:
+        filtered_classes = known_classes
+
+    if not filtered_classes:
+        st.warning("Aucune classe active à afficher. Chargez un fichier Excel ou vérifiez vos fichiers.")
+    else:
         with st.form(key=f"form_cours_{selected_school}"):
             updated_data = {}
             cols = st.columns(2)
@@ -552,13 +564,13 @@ with cours_mgr_tab:
                     updated_data[classe] = st.text_area(
                         label=f"🏫 Classe : **{classe}**",
                         value=existing_codes,
-                        placeholder="Collez ici les nouveaux codes de cours (un par ligne)...",
+                        placeholder="Ex: MLI41251\nINFO101",
                         height=120,
                         key=f"txt_{selected_school}_{classe}"
                     )
             
             st.divider()
-            save_btn = st.form_submit_button("💾 Sauvegarder tous les nouveaux codes cours", type="primary", use_container_width=True)
+            save_btn = st.form_submit_button("💾 Enregistrer tous les codes cours", type="primary", use_container_width=True)
             
             if save_btn:
                 for cls_name, raw_content in updated_data.items():
