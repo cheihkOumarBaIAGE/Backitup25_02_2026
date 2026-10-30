@@ -328,6 +328,13 @@ def read_cours_mapping(cours_dir: Path):
         mapping[txt_file.stem.upper()] = [l.strip() for l in txt_file.open("r", encoding="utf-8") if l.strip()]
     return mapping
 
+def save_cours_mapping(cours_dir: Path, class_name: str, raw_text: str):
+    cours_dir.mkdir(parents=True, exist_ok=True)
+    file_path = cours_dir / f"{class_name}.txt"
+    lines = [line.strip() for line in raw_text.replace(",", "\n").split("\n") if line.strip()]
+    with file_path.open("w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
 def normalize_and_clean_df(df: pd.DataFrame):
     df.columns = [col.strip().capitalize() for col in df.columns]
     df = df[["Classe", "E-mail", "Nom", "Prénom"]].copy()
@@ -348,12 +355,12 @@ with st.sidebar:
     selected_school = st.selectbox("Sélectionner l'école", SCHOOLS)
     zip_opt = st.checkbox("Générer Archive ZIP (Automatique)", value=True)
     st.divider()
-    st.caption("v2.6 - Added Manual Inscription Mode")
+    st.caption("v2.7 - Added Course Codes Bulk Management Interface")
 
 st.title("Urgence IT BASH")
 
 # --- NAVIGATION TABS ---
-main_tab, manual_tab = st.tabs(["BASH", "MAJ de cours"])
+main_tab, cours_mgr_tab, manual_tab = st.tabs(["BASH", "📚 Gestion des Codes Cours", "MAJ de cours"])
 
 # -----------------------
 # TAB 1: AUTOMATIC TREATMENT
@@ -482,7 +489,55 @@ with main_tab:
                 st.text_area("Audit Log", report, height=300)
 
 # -----------------------
-# TAB 2: MANUAL INSCRIPTION
+# TAB 2: COURSE MAPPING MANAGEMENT
+# -----------------------
+with cours_mgr_tab:
+    st.subheader(f"📝 Gestion centralisée des codes cours — {selected_school}")
+    st.info("Collez directement les codes de cours pour chaque classe ci-dessous (un code par ligne ou séparés par des virgules). Les modifications mettent automatiquement à jour les fichiers d'arrière-plan.")
+
+    cours_dir = DATA_DIR / selected_school / "CoursParClasse"
+    current_cours = read_cours_mapping(cours_dir)
+    
+    # Obtenir toutes les classes connues pour l'école
+    known_classes = sorted(list(SCHOOL_MAPPINGS.get(selected_school, {}).keys()))
+    
+    # Recherche rapide de classe
+    search_class = st.text_input("🔍 Filtrer les classes...", placeholder="Ex: L1, LDA, MBA...")
+    if search_class:
+        filtered_classes = [c for c in known_classes if search_class.upper() in c.upper()]
+    else:
+        filtered_classes = known_classes
+
+    if not filtered_classes:
+        st.warning("Aucune classe trouvée correspondant à la recherche.")
+    else:
+        with st.form(key=f"form_cours_{selected_school}"):
+            updated_data = {}
+            # Affichage responsive sous forme de grille (2 colonnes)
+            cols = st.columns(2)
+            for idx, classe in enumerate(filtered_classes):
+                col = cols[idx % 2]
+                with col:
+                    existing_codes = "\n".join(current_cours.get(classe, []))
+                    updated_data[classe] = st.text_area(
+                        label=f"🏫 Classe : **{classe}**",
+                        value=existing_codes,
+                        placeholder="Ex: MLI41251\nINFO101",
+                        height=120,
+                        key=f"txt_{selected_school}_{classe}"
+                    )
+            
+            st.divider()
+            save_btn = st.form_submit_button("💾 Enregistrer tous les codes cours", type="primary", use_container_width=True)
+            
+            if save_btn:
+                for cls_name, raw_content in updated_data.items():
+                    save_cours_mapping(cours_dir, cls_name, raw_content)
+                st.success(f"✅ Les codes cours pour {len(updated_data)} classes de **{selected_school}** ont été enregistrés avec succès !")
+                st.rerun()
+
+# -----------------------
+# TAB 3: MANUAL INSCRIPTION
 # -----------------------
 with manual_tab:
     st.subheader("🛠️ Générateur d'inscriptions rapide")
