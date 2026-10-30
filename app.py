@@ -5,6 +5,7 @@ from datetime import datetime
 from io import BytesIO
 import zipfile
 import csv
+import shutil
 
 # -----------------------
 # Page configuration
@@ -328,6 +329,14 @@ def read_cours_mapping(cours_dir: Path):
         mapping[txt_file.stem.upper()] = [l.strip() for l in txt_file.open("r", encoding="utf-8") if l.strip()]
     return mapping
 
+def reset_and_init_cours_dir(cours_dir: Path, class_names: list):
+    """Purge le dossier CoursParClasse et crée un fichier vide par classe Excel."""
+    if cours_dir.exists():
+        shutil.rmtree(cours_dir)
+    cours_dir.mkdir(parents=True, exist_ok=True)
+    for c_name in class_names:
+        (cours_dir / f"{c_name}.txt").touch()
+
 def save_cours_mapping(cours_dir: Path, class_name: str, raw_text: str):
     cours_dir.mkdir(parents=True, exist_ok=True)
     file_path = cours_dir / f"{class_name}.txt"
@@ -355,7 +364,7 @@ with st.sidebar:
     selected_school = st.selectbox("Sélectionner l'école", SCHOOLS)
     zip_opt = st.checkbox("Générer Archive ZIP (Automatique)", value=True)
     st.divider()
-    st.caption("v2.7 - Added Course Codes Bulk Management Interface")
+    st.caption("v2.9 - Full Reset & Excel Sync Mode")
 
 st.title("Urgence IT BASH")
 
@@ -492,28 +501,49 @@ with main_tab:
 # TAB 2: COURSE MAPPING MANAGEMENT
 # -----------------------
 with cours_mgr_tab:
-    st.subheader(f"📝 Gestion centralisée des codes cours — {selected_school}")
-    st.info("Collez directement les codes de cours pour chaque classe ci-dessous (un code par ligne ou séparés par des virgules). Les modifications mettent automatiquement à jour les fichiers d'arrière-plan.")
+    st.subheader(f"📝 Reconfiguration complète des classes — {selected_school}")
+    st.warning("⚠️ Importer un fichier Excel va SUPPRIMER toutes les anciennes classes/codes de cette école et générer uniquement les classes du fichier.")
 
     cours_dir = DATA_DIR / selected_school / "CoursParClasse"
-    current_cours = read_cours_mapping(cours_dir)
     
-    # Obtenir toutes les classes connues pour l'école
-    known_classes = sorted(list(SCHOOL_MAPPINGS.get(selected_school, {}).keys()))
-    
-    # Recherche rapide de classe
-    search_class = st.text_input("🔍 Filtrer les classes...", placeholder="Ex: L1, LDA, MBA...")
-    if search_class:
-        filtered_classes = [c for c in known_classes if search_class.upper() in c.upper()]
-    else:
-        filtered_classes = known_classes
+    col_file, col_reset = st.columns([3, 1])
+    with col_file:
+        excel_for_classes = st.file_uploader("📥 Charger l'Excel des inscriptions (Vider & Réinitialiser)", type=["xls", "xlsx"], key="excel_cours_reset")
+    with col_reset:
+        st.write("##")
+        reset_confirm = st.button("🗑️ Vider manuellement tout", use_container_width=True, help="Supprime toutes les classes enregistrées sans importer d'Excel")
 
-    if not filtered_classes:
-        st.warning("Aucune classe trouvée correspondant à la recherche.")
+    if reset_confirm:
+        reset_and_init_cours_dir(cours_dir, [])
+        st.warning(f"🧹 Toutes les classes et codes pour **{selected_school}** ont été supprimés.")
+        st.rerun()
+
+    if excel_for_classes:
+        try:
+            df_sync = pd.read_excel(excel_for_classes, dtype=str)
+            df_cleaned = normalize_and_clean_df(df_sync)
+            excel_classes = sorted(list(df_cleaned["Classroom Name"].dropna().unique()))
+            
+            # Action de Réinitialisation complète
+            reset_and_init_cours_dir(cours_dir, excel_classes)
+            st.success(f"⚡ Ancien dossier purgé ! {len(excel_classes)} nouvelles classes créées à partir du fichier Excel.")
+        except Exception as e:
+            st.error(f"Erreur lors de la réinitialisation : {e}")
+
+    current_cours = read_cours_mapping(cours_dir)
+    known_classes = sorted(list(current_cours.keys()))
+
+    if not known_classes:
+        st.info("💡 Aucune classe actuellement enregistrée. Veuillez importer un fichier Excel ci-dessus pour générer automatiquement la liste des classes.")
     else:
+        search_class = st.text_input("🔍 Filtrer les classes chargées...", placeholder="Ex: L1, LDA, MBA...")
+        if search_class:
+            filtered_classes = [c for c in known_classes if search_class.upper() in c.upper()]
+        else:
+            filtered_classes = known_classes
+
         with st.form(key=f"form_cours_{selected_school}"):
             updated_data = {}
-            # Affichage responsive sous forme de grille (2 colonnes)
             cols = st.columns(2)
             for idx, classe in enumerate(filtered_classes):
                 col = cols[idx % 2]
@@ -522,13 +552,13 @@ with cours_mgr_tab:
                     updated_data[classe] = st.text_area(
                         label=f"🏫 Classe : **{classe}**",
                         value=existing_codes,
-                        placeholder="Ex: MLI41251\nINFO101",
+                        placeholder="Collez ici les nouveaux codes de cours (un par ligne)...",
                         height=120,
                         key=f"txt_{selected_school}_{classe}"
                     )
             
             st.divider()
-            save_btn = st.form_submit_button("💾 Enregistrer tous les codes cours", type="primary", use_container_width=True)
+            save_btn = st.form_submit_button("💾 Sauvegarder tous les nouveaux codes cours", type="primary", use_container_width=True)
             
             if save_btn:
                 for cls_name, raw_content in updated_data.items():
