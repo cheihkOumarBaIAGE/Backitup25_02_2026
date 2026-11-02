@@ -333,9 +333,12 @@ def save_cours_mapping(cours_dir: Path, class_name: str, raw_text: str):
     cours_dir.mkdir(parents=True, exist_ok=True)
     file_path = cours_dir / f"{class_name}.txt"
     lines = [line.strip() for line in raw_text.replace(",", "\n").split("\n") if line.strip()]
+    
+    # AJOUT : Crée le sous-dossier parent si class_name contient un chemin (ex: "INGENIEUR/ClasseA")
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    
     with file_path.open("w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-
 def archive_obsolete_class_files(cours_dir: Path, active_classes: set):
     """
     Renomme tous les fichiers .txt existants dont la classe ne fait PAS partie 
